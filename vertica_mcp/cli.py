@@ -16,6 +16,7 @@ from .connection import (
 )
 
 from dotenv import load_dotenv
+
 load_dotenv()
 
 
@@ -59,11 +60,14 @@ def main(
     if ssl is not None:
         os.environ[VERTICA_SSL] = str(ssl).lower()
     if ssl_reject_unauthorized is not None:
-        os.environ[VERTICA_SSL_REJECT_UNAUTHORIZED] = str(ssl_reject_unauthorized).lower()
+        os.environ[VERTICA_SSL_REJECT_UNAUTHORIZED] = str(
+            ssl_reject_unauthorized
+        ).lower()
     if transport == "sse":
         asyncio.run(run_sse(port=port))
     else:
         mcp.run()
+
 
 @click.command()
 @click.option(
@@ -127,5 +131,6 @@ def main(
 )
 def cli(**kwargs):
     main(**kwargs)
+
 
 # __all__ = ["main", "cli"]

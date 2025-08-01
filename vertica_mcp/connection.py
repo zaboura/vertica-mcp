@@ -20,25 +20,31 @@ VERTICA_SSL_REJECT_UNAUTHORIZED = "VERTICA_SSL_REJECT_UNAUTHORIZED"
 # Configure logging
 logger = logging.getLogger("vertica-mcp")
 
+
 class OperationType(Enum):
     """Enum for different operation types."""
+
     INSERT = auto()
     UPDATE = auto()
     DELETE = auto()
     DDL = auto()
 
+
 @dataclass
 class SchemaPermissions:
     """Dataclass to hold schema-specific permissions."""
+
     # Permissions for schema operations
     insert: bool = False
     update: bool = False
     delete: bool = False
     ddl: bool = False
 
+
 @dataclass
 class VerticaConfig:
     """Dataclass to hold Vertica connection configuration."""
+
     # Connection parameters
     host: str
     port: int
@@ -64,7 +70,7 @@ class VerticaConfig:
             raise ValueError("connection_limit must be a positive integer")
 
     @classmethod
-    def from_env(cls) -> 'VerticaConfig':
+    def from_env(cls) -> "VerticaConfig":
         """Create config from environment variables."""
         # Parse schema permissions
         schema_permissions = {}
@@ -72,16 +78,20 @@ class VerticaConfig:
             ("SCHEMA_INSERT_PERMISSIONS", "insert"),
             ("SCHEMA_UPDATE_PERMISSIONS", "update"),
             ("SCHEMA_DELETE_PERMISSIONS", "delete"),
-            ("SCHEMA_DDL_PERMISSIONS", "ddl")
+            ("SCHEMA_DDL_PERMISSIONS", "ddl"),
         ]:
             env_var, perm_type = schema_perm
             if perm_str := os.getenv(env_var):
-                for pair in perm_str.split(','):
-                    schema, value = pair.split(':')
+                for pair in perm_str.split(","):
+                    schema, value = pair.split(":")
                     schema = schema.strip()
                     if schema not in schema_permissions:
                         schema_permissions[schema] = SchemaPermissions()
-                    setattr(schema_permissions[schema], perm_type, value.strip().lower() == 'true')
+                    setattr(
+                        schema_permissions[schema],
+                        perm_type,
+                        value.strip().lower() == "true",
+                    )
 
         return cls(
             host=os.getenv("VERTICA_HOST", "localhost"),
@@ -91,16 +101,21 @@ class VerticaConfig:
             password=os.getenv("VERTICA_PASSWORD", ""),
             connection_limit=int(os.getenv("VERTICA_CONNECTION_LIMIT", "10")),
             ssl=os.getenv("VERTICA_SSL", "false").lower() == "true",
-            ssl_reject_unauthorized=os.getenv("VERTICA_SSL_REJECT_UNAUTHORIZED", "true").lower() == "true",
+            ssl_reject_unauthorized=os.getenv(
+                "VERTICA_SSL_REJECT_UNAUTHORIZED", "true"
+            ).lower()
+            == "true",
             allow_insert=os.getenv("ALLOW_INSERT_OPERATION", "false").lower() == "true",
             allow_update=os.getenv("ALLOW_UPDATE_OPERATION", "false").lower() == "true",
             allow_delete=os.getenv("ALLOW_DELETE_OPERATION", "false").lower() == "true",
             allow_ddl=os.getenv("ALLOW_DDL_OPERATION", "false").lower() == "true",
-            schema_permissions=schema_permissions
+            schema_permissions=schema_permissions,
         )
+
 
 class VerticaConnectionPool:
     """A thread-safe connection pool for Vertica connections."""
+
     def __init__(self, config: VerticaConfig):
         self.config = config
         self.pool: Queue = Queue(maxsize=config.connection_limit)
@@ -111,7 +126,7 @@ class VerticaConnectionPool:
         except Exception as e:
             logger.error(f"Failed to initialize pool: {e}")
             # self.pool = None
-            
+
             raise
 
     def __enter__(self):
@@ -147,9 +162,12 @@ class VerticaConnectionPool:
 
     def _initialize_pool(self):
         """Initialize the connection pool with the specified number of connections."""
+
         logger.info(
-            f"Initializing Vertica connection pool with {self.config.connection_limit} connections"
+            "Initializing Vertica connection pool with %d connections",
+            self.config.connection_limit,
         )
+
         for _ in range(self.config.connection_limit):
             try:
                 conn = vertica_python.connect(**self._get_connection_config())
@@ -198,8 +216,10 @@ class VerticaConnectionPool:
             except:
                 pass
 
+
 class VerticaConnectionManager:
     """Singleton class to manage Vertica connections."""
+
     def __init__(self):
         self.pool: Optional[VerticaConnectionPool] = None
         self.config: Optional[VerticaConfig] = None

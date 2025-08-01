@@ -1,5 +1,6 @@
 import logging
 
+
 def setup_logger(verbose: int) -> logging.Logger:
     logger = logging.getLogger("vertica-mcp")
     logger.propagate = False
@@ -17,7 +18,9 @@ def setup_logger(verbose: int) -> logging.Logger:
             handler.setLevel(logging.DEBUG)
             logger.setLevel(logging.DEBUG)
             level = logging.DEBUG
-        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        formatter = logging.Formatter(
+            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        )
         handler.setFormatter(formatter)
         logger.addHandler(handler)
     logging.basicConfig(level=level, force=True)
