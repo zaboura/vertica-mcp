@@ -70,6 +70,37 @@ Vertica MCP enables scalable, distributed analytics using Vertica clusters. This
     - `<your_password>`: Your Vertica password
 
 ## Usage
+### Using MCP Inspector (Windows)
+
+To use MCP Inspector, set your `PYTHONPATH` to the current directory and run the server:
+
+```pwsh
+$env:PYTHONPATH = (Resolve-Path .).Path
+mcp dev .\vertica_mcp\server.py
+```
+
+This will start the MCP server in development mode with the inspector enabled.
+
+### Running the Server with UV (Windows)
+
+**Command:**
+
+```pwsh
+uv
+```
+
+**Arguments:**
+
+```pwsh
+run --with mcp --with pydantic --with uvicorn --with starlette --with vertica-python mcp run vertica_mcp/server.py
+```
+
+This will:
+- Create an isolated environment using `uv`
+- Install MCP and all required dependencies
+- Run the server in development mode
+- Auto-reload when code changes
+- Configure the environment from `.env` or environment variables
 
 ### Running the Server
 
@@ -102,3 +133,5 @@ You can start the server in two ways:
 ## License
 
 This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
+
+
