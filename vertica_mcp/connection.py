@@ -1,11 +1,13 @@
+"""Vertica connection management module."""
+
 import os
 import logging
 from queue import Queue
 import threading
-import vertica_python
-from typing import Dict, Any, Optional, Set
+from typing import Dict, Any, Optional
 from dataclasses import dataclass
 from enum import Enum, auto
+import vertica_python
 
 # Constants for environment variables
 VERTICA_HOST = "VERTICA_HOST"
@@ -119,15 +121,16 @@ class VerticaConnectionPool:
     def __init__(self, config: VerticaConfig):
         self.config = config
         self.pool: Queue = Queue(maxsize=config.connection_limit)
-        self.active_connections = 0
         self.lock = threading.Lock()
-        try:
-            self._initialize_pool()
-        except Exception as e:
-            logger.error(f"Failed to initialize pool: {e}")
-            # self.pool = None
-
-            raise
+        self.active_connections = 0
+        # Lazy by default: don't open sockets during server startup
+        self.lazy = os.getenv("VERTICA_LAZY_INIT", "1").lower() in ("1", "true", "yes")
+        if not self.lazy:
+            try:
+                self._initialize_pool()
+            except Exception as e:
+                logger.error(f"Failed to initialize pool: {e}")
+                raise
 
     def __enter__(self):
         return self
@@ -181,16 +184,22 @@ class VerticaConnectionPool:
         with self.lock:
             if self.pool is None:
                 raise Exception("Connection pool is not initialized")
+            # If we have one ready, use it.
+            try:
+                conn = self.pool.get_nowait()
+                self.active_connections += 1
+                return conn
+            except Exception:
+                pass
+            # None available: create on demand (lazy path) if under limit
             if self.active_connections >= self.config.connection_limit:
                 raise Exception("No available connections in the pool")
-
             try:
-                conn = self.pool.get(timeout=5)  # 5 second timeout
+                conn = vertica_python.connect(**self._get_connection_config())
                 self.active_connections += 1
                 return conn
             except Exception as e:
-                logger.error(f"Failed to get connection from pool: {str(e)}")
-                # self._initialize_pool()
+                logger.error(f"Failed to open Vertica connection: {str(e)}")
                 raise
 
     def release_connection(self, conn: vertica_python.Connection):
