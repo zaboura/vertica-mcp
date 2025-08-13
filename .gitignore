@@ -8,4 +8,7 @@ wheels/
 
 # Virtual environments
 .venv
+
+#files
+claude_desktop_config.jsonc
 .env
