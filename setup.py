@@ -5,11 +5,15 @@ setup(
     name="vertica-mcp",
     version="0.1.0",
     packages=find_packages(),
+    entry_points={
+        "console_scripts": [
+            "vertica-mcp=vertica_mcp.cli:cli",
+        ],
+    },
     install_requires=[
-        "vertica-python",
-        "pydantic",
-        "starlette",
-        "uvicorn",
-        "mcp",
+        "click>=8.2.1",
+        "mcp[cli]>=1.11.0",
+        "python-dotenv>=1.1.1",
+        "vertica-python>=1.4.0",
     ],
 )
