@@ -32,7 +32,7 @@ def main(
     transport: str,
     port: int,
     host: str | None,  # ← Now can be None
-    bind_host: str,     # ← Separate binding host
+    bind_host: str,  # ← Separate binding host
     db_port: int | None,
     database: str | None,
     user: str | None,
@@ -43,7 +43,7 @@ def main(
 ) -> None:
     """MCP Vertica Server - Vertica functionality for MCP"""
     setup_logger(verbose)
-    
+
     # Load .env first
     if env_file:
         logging.debug("Loading environment from file: %s", env_file)
@@ -51,7 +51,7 @@ def main(
     else:
         logging.debug("Loading environment from default .env file")
         load_dotenv()
-    
+
     # Set environment variables from CLI args (only if provided)
     if host:  # ← Only override if explicitly provided
         os.environ[VERTICA_HOST] = host
@@ -78,6 +78,8 @@ def main(
         asyncio.run(run_sse(host=bind_host, port=port))
     else:
         mcp.run()
+
+
 @click.command()
 @click.option(
     "-v",
@@ -149,5 +151,3 @@ def cli(**kwargs):
     This function sets up the command-line interface using Click and calls the main function.
     """
     main(**kwargs)
-
-
