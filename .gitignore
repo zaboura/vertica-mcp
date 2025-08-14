@@ -11,4 +11,4 @@ wheels/
 
 #files
 claude_desktop_config.jsonc
-.env
+.env.env.example
