@@ -1,361 +1,502 @@
 # Vertica MCP Server
 
-A Multi-Cloud Platform (MCP) server for Vertica database operations, providing AI-powered database management and query capabilities.
+<p align="center">
+  <img src="https://img.shields.io/badge/MCP-1.0-blue.svg" alt="MCP Version">
+  <img src="https://img.shields.io/badge/Python-3.11+-green.svg" alt="Python Version">
+  <img src="https://img.shields.io/badge/Vertica-24.x+-orange.svg" alt="Vertica Version">
+  <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License">
+</p>
 
-## Features
+A powerful Model Context Protocol (MCP) server for Vertica Analytics Database, enabling AI assistants like Claude to directly interact with your Vertica database through standardized tools and prompts.
 
-- **Comprehensive Database Operations**: Execute, stream, and analyze SQL queries
-- **Schema Management**: List tables, views, projections, and schemas
-- **Query Analysis**: Explain and profile query execution plans
-- **Health Monitoring**: Database status and performance metrics
-- **Projection Optimization**: Analyze and suggest projection improvements
-- **AI Prompts**: Built-in prompts for query analysis and optimization
-- **Connection Pooling**: Efficient connection management
-- **Security**: Configurable operation permissions per schema
+## 🎯 Overview
 
-## Quick Start
+The Vertica MCP Server bridges the gap between AI language models and your Vertica database, providing secure, controlled access to database operations through the Model Context Protocol. This enables Claude and other MCP-compatible AI assistants to query, analyze, and manage your Vertica databases with natural language commands.
 
-### Option 1: Using MCP Dev Command (Recommended for Development)
+### What is MCP?
 
-The easiest way to run the MCP server with SSE transport is using the `mcp dev` command:
+The Model Context Protocol (MCP) is an open standard developed by Anthropic that provides a universal way for AI assistants to connect with external tools and data sources. Think of it as "USB-C for AI" - a standardized interface that allows any MCP-compatible AI to interact with your systems without custom integrations.
 
-#### Prerequisites
-- Python 3.12+
-- MCP CLI installed: `pip install mcp[cli]`
-- Vertica database running
+## ✨ Features
 
-#### 1. Install the Package
+### Core Capabilities
+- **🔍 Query Execution**: Execute SELECT queries with automatic pagination and safety controls
+- **📊 Performance Analysis**: Profile queries and get execution plans with optimization recommendations
+- **🗂️ Schema Management**: List and explore tables, views, projections, and schemas
+- **💾 Streaming Support**: Handle large result sets with efficient streaming and pagination
+- **🔒 Security**: Configurable operation permissions at global and schema levels
+- **⚡ Connection Pooling**: Efficient connection management with configurable pool sizes
+- **🎨 AI Prompts**: Built-in intelligent prompts for query optimization and database analysis
+
+### Built-in Tools
+
+| Tool | Description |
+|------|-------------|
+| `run_query_safely` | Execute queries with automatic large result set detection and confirmation |
+| `execute_query_paginated` | Paginated query execution with LIMIT/OFFSET support |
+| `execute_query_stream` | Stream large result sets in batches |
+| `get_table_structure` | Get detailed table structure including columns and constraints |
+| `get_schema_tables` | List all tables in a schema |
+| `get_schema_views` | List all views in a schema |
+| `get_database_schemas` | List all database schemas |
+| `get_table_projections` | List projections for a specific table |
+| `database_status` | Get database health and usage statistics |
+| `profile_query` | Profile query performance and get execution plans |
+| `analyze_system_performance` | Monitor system performance metrics and resource usage |
+
+### AI-Powered Prompts
+
+| Prompt | Purpose |
+|--------|---------|
+| `sql_query_safety_guard` | Prevents accidental large result sets |
+| `vertica_performance_analyzer` | Deep-dive query performance analysis |
+| `vertica_sql_assistant` | Generate optimized Vertica SQL queries |
+| `vertica_health_dashboard` | Comprehensive database status visualization |
+| `vertica_system_monitor` | Real-time performance monitoring |
+
+## 📋 Prerequisites
+
+- **Python** 3.11 or higher
+- **Vertica Database** (accessible)
+- **uv** (Python package manager) - [Installation guide](https://github.com/astral-sh/uv)
+- **Claude Desktop** or another MCP-compatible client (optional)
+
+## 🚀 Quick Start
+
+### 1. Clone the Repository
+
 ```bash
-# Install in development mode
-pip install -e .
+git clone https://github.com/zaboura/vertica-mcp.git
+cd vertica-mcp
+```
 
-# Or using uv
+### 2. Install uv (if not already installed)
+
+```bash
+# On macOS/Linux
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# On Windows
+powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+Or, from [PyPi](https://pypi.org/project/uv/)
+
+
+```bash
+pip install uv
+```
+
+### 3. Set Up Python Environment
+
+```bash
+# Create virtual environment and install dependencies
+uv venv
+uv pip install -e .
+
+# Or install all dependencies at once
 uv sync
 ```
 
-#### 2. Configure Database Connection
-The server will automatically load configuration from your existing `.env` file. Make sure it contains your Vertica connection details:
+### 4. Configure Database Connection
+
+Create a `.env` file in the project root:
+
 ```bash
+# Database Connection
 VERTICA_HOST=localhost
 VERTICA_PORT=5433
 VERTICA_DATABASE=your_database
 VERTICA_USER=your_username
 VERTICA_PASSWORD=your_password
+
+# Connection Pool
 VERTICA_CONNECTION_LIMIT=10
+VERTICA_LAZY_INIT=1  # Lazy connection initialization
+
+# SSL Configuration
 VERTICA_SSL=false
 VERTICA_SSL_REJECT_UNAUTHORIZED=true
+
+# Operation Permissions (optional)
+ALLOW_INSERT_OPERATION=false
+ALLOW_UPDATE_OPERATION=false
+ALLOW_DELETE_OPERATION=false
+ALLOW_DDL_OPERATION=false
+
+# Schema-specific Permissions (optional)
+SCHEMA_INSERT_PERMISSIONS=public:true,sales:false
+SCHEMA_UPDATE_PERMISSIONS=public:true,sales:false
+SCHEMA_DELETE_PERMISSIONS=public:false,sales:false
+SCHEMA_DDL_PERMISSIONS=public:false,sales:false
 ```
 
-#### 3. Run with MCP Dev Command
-```bash
-# Run with SSE transport on port 8000
-mcp dev mcp_config.json
+## 🏃 Running the Server
 
-# Or run directly with CLI
-python vertica_mcp/cli.py --transport sse --port 8000
+### Option 1: Using CLI (Recommended)
+
+The server supports multiple transport protocols:
+
+#### STDIO Transport (Default)
+```bash
+# Basic usage
+vertica-mcp
+
+# With verbose logging
+vertica-mcp -v
+
+# With custom environment file
+vertica-mcp --env-file production.env
 ```
 
-#### 4. Test the Connection
+#### SSE Transport (HTTP Server-Sent Events)
 ```bash
-# Health check
-curl http://localhost:8000/health
+# Start SSE server on default port 8000
+vertica-mcp --transport sse
 
-# Test SSE endpoint
-curl -N http://localhost:8000/mcp
+# Custom port and host
+vertica-mcp --transport sse --port 3000 --bind-host 0.0.0.0
+
+# With database override
+vertica-mcp --transport sse --host db.example.com --database production_db
 ```
 
-### Option 2: Using Docker (Recommended for Production)
-
-#### Prerequisites
-
-- Docker and Docker Compose installed
-- At least 4GB RAM available for Vertica
-
-### 1. Clone and Setup
+### Option 2: Using Python Module
 
 ```bash
-git clone <your-repo-url>
+# STDIO transport
+python -m vertica_mcp.cli
+
+# SSE transport with options
+python -m vertica_mcp.cli --transport sse --port 8000 -vv
+```
+
+### Option 3: Using uv run
+
+```bash
+# Run with uv directly
+uv run vertica-mcp --transport sse --port 8000
+
+# Or from the server module
+uv run python vertica_mcp/server.py
+```
+
+## 🔍 Testing with MCP Inspector
+
+MCP Inspector is a visual debugging tool for MCP servers. It's invaluable for testing your server implementation.
+
+### Installation and Usage
+
+```bash
+# Install MCP Inspector globally
+npm install -g @modelcontextprotocol/inspector
+
+# Run inspector from your project directory
 cd vertica-mcp
+npx @modelcontextprotocol/inspector vertica_mcp/server.py
+
+# The inspector UI will open at http://localhost:5173
 ```
 
-### 2. Run with Docker Compose
+### Using the Inspector
 
-#### Development Environment
-```bash
-# Start development stack with sample data
-make dev
+1. **Test Tools**: Click on "Tools" tab to see all available tools
+2. **Execute Queries**: Test `run_query_safely` with sample queries
+3. **View Responses**: See formatted JSON responses and errors
+4. **Test Prompts**: Try the built-in AI prompts
+5. **Monitor Performance**: Use `profile_query` to analyze query performance
 
-# Or manually:
-docker-compose -f docker-compose.dev.yml up -d
-```
+## 🤖 Claude Desktop Integration
 
-#### Production Environment
-```bash
-# Start production stack
-make run
+### Configuration
 
-# Or manually:
-docker-compose up -d
-```
+1. **Open Claude Desktop Settings**
+   - On macOS: Claude menu → Settings
+   - On Windows: File → Settings
 
-### 3. Verify Installation
+2. **Edit Configuration**
+   - Click "Edit Config" in Developer tab
+   - This opens `claude_desktop_config.json`
 
-```bash
-# Check health
-make health
+3. **Add Server Configuration**
 
-# Test database connection
-make db-test
-
-# View logs
-make logs-dev  # for development
-make logs      # for production
-```
-
-### 4. Access Services
-
-- **MCP Server**: http://localhost:8000
-- **Health Check**: http://localhost:8000/health
-- **Adminer (Dev)**: http://localhost:8080 (Database management UI)
-- **Nginx Proxy**: http://localhost:8080 (Production)
-
-## Configuration
-
-### MCP Configuration
-
-The `mcp_config.json` file defines how the MCP server should be started. It uses your existing `.env` file for configuration:
-
+#### For STDIO Transport:
 ```json
 {
   "mcpServers": {
     "vertica-mcp": {
-      "command": "python",
-      "args": ["vertica_mcp/cli.py", "--transport", "sse", "--port", "8000"]
+      "command": "uv",
+      "args": [
+        "run",
+        "--with", "mcp[cli]",
+        "--with", "vertica-python",
+        "--with", "python-dotenv",
+        "--with", "pydantic",
+        "--with", "starlette",
+        "--with", "uvicorn",
+        "mcp",
+        "run",
+        "/path/to/vertica-mcp/vertica_mcp/server.py"
+      ],
+      "env": {
+        "PYTHONPATH": "/path/to/vertica-mcp",
+        "VERTICA_HOST": "localhost",
+        "VERTICA_PORT": "5433",
+        "VERTICA_DATABASE": "your_database",
+        "VERTICA_USER": "your_username",
+        "VERTICA_PASSWORD": "your_password",
+        "VERTICA_CONNECTION_LIMIT": "10"
+      }
     }
   }
 }
 ```
 
-### Environment Variables
+#### For SSE Transport:
+```json
+{
+  "mcpServers": {
+    "vertica-mcp-sse": {
+      "command": "npx",
+      "args": ["@modelcontextprotocol/remote", "http://localhost:8000/sse"]
+    }
+  }
+}
+```
 
-Create a `.env` file or set environment variables:
+4. **Restart Claude Desktop**
+   - Quit and restart Claude Desktop
+   - Look for the MCP indicator (🔌) in the chat input area
+   - Click it to see available tools
+
+### Usage Examples
+
+Once connected, you can ask Claude:
+
+```text
+"Show me all tables in the public schema"
+"Analyze the performance of this query: SELECT * FROM sales.orders WHERE order_date > '2024-01-01'"
+"What's the current database status and usage?"
+"Profile this query and suggest optimizations"
+"Monitor system performance for the last 15 minutes"
+```
+
+## 🛠️ CLI Options Reference
 
 ```bash
-# Database Connection
-VERTICA_HOST=vertica
-VERTICA_PORT=5433
-VERTICA_DATABASE=VMart
-VERTICA_USER=dbadmin
-VERTICA_PASSWORD=password
+vertica-mcp [OPTIONS]
+```
 
-# Connection Pool
-VERTICA_CONNECTION_LIMIT=10
+| Option | Description | Default |
+|--------|-------------|---------|
+| `-v, --verbose` | Increase verbosity (use multiple times: -v, -vv, -vvv) | ERROR |
+| `--env-file PATH` | Path to .env file | `.env` |
+| `--transport TYPE` | Transport protocol (stdio, sse, http) | `stdio` |
+| `--port INT` | Port for SSE/HTTP transport | `8000` |
+| `--host HOST` | Vertica database host | `localhost` |
+| `--bind-host HOST` | Host to bind SSE/HTTP server | `localhost` |
+| `--db-port INT` | Vertica database port | `5433` |
+| `--database NAME` | Database name | from env |
+| `--user USERNAME` | Database username | from env |
+| `--password PASS` | Database password | from env |
+| `--connection-limit INT` | Max connections in pool | `10` |
+| `--ssl` | Enable SSL for database | `false` |
+| `--ssl-reject-unauthorized` | Reject unauthorized SSL certs | `true` |
 
-# SSL Settings
-VERTICA_SSL=false
+## 🔧 Advanced Configuration
+
+### Connection Pool Tuning
+
+```bash
+# Optimize for high concurrency
+VERTICA_CONNECTION_LIMIT=50
+VERTICA_LAZY_INIT=1  # Don't create connections until needed
+
+# Optimize for low latency
+VERTICA_CONNECTION_LIMIT=20
+VERTICA_LAZY_INIT=0  # Pre-create all connections
+```
+
+### Security Configuration
+
+#### Global Permissions
+```bash
+# Read-only mode
+ALLOW_INSERT_OPERATION=false
+ALLOW_UPDATE_OPERATION=false
+ALLOW_DELETE_OPERATION=false
+ALLOW_DDL_OPERATION=false
+```
+
+#### Schema-Specific Permissions
+```bash
+# Format: schema1:permission,schema2:permission
+SCHEMA_INSERT_PERMISSIONS=staging:true,production:false
+SCHEMA_UPDATE_PERMISSIONS=staging:true,production:false
+SCHEMA_DELETE_PERMISSIONS=staging:true,production:false
+SCHEMA_DDL_PERMISSIONS=staging:false,production:false
+```
+
+### SSL/TLS Configuration
+
+```bash
+# Enable SSL with certificate verification
+VERTICA_SSL=true
 VERTICA_SSL_REJECT_UNAUTHORIZED=true
 
-# Operation Permissions
-ALLOW_INSERT_OPERATION=true
-ALLOW_UPDATE_OPERATION=true
-ALLOW_DELETE_OPERATION=true
-ALLOW_DDL_OPERATION=true
-
-# Schema-specific Permissions (optional)
-SCHEMA_INSERT_PERMISSIONS=public:true,sales:true
-SCHEMA_UPDATE_PERMISSIONS=public:true,sales:false
-SCHEMA_DELETE_PERMISSIONS=public:false,sales:false
-SCHEMA_DDL_PERMISSIONS=public:true,sales:false
+# Enable SSL without certificate verification (development only)
+VERTICA_SSL=true
+VERTICA_SSL_REJECT_UNAUTHORIZED=false
 ```
 
-### Docker Compose Overrides
+## 📊 Using the Tools
 
-For different environments, create override files:
+### Query Execution with Safety
 
-```bash
-# Development
-docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
-
-# Production
-docker-compose -f docker-compose.yml -f docker-compose.prod.yml up
-```
-
-## Available Tools
-
-### Database Operations
-- `execute_query`: Execute SQL queries
-- `stream_query`: Stream large result sets
-- `copy_data`: Bulk data insertion
-- `database_status`: Get database health and metrics
-
-### Schema Management
-- `list_tables`: List tables in a schema
-- `list_views`: List views in a schema
-- `list_schemas`: List all schemas
-- `list_projections`: List projections for a table
-- `get_table_structure`: Get detailed table structure
-
-### Query Analysis
-- `explain_query`: Get query execution plan
-- `profile_query`: Profile query performance
-- `get_long_running_queries`: Monitor long-running queries
-- `analyze_projection_optimization`: Analyze projection performance
-
-### Health Monitoring
-- `check_vertica_health`: Comprehensive health check
-- `get_vertica_metrics`: System and performance metrics
-
-### AI Prompts
-- `analyze_query_performance`: AI prompt for query analysis
-- `write_query_for_task`: AI prompt for query generation
-- `database_status_prompt`: AI prompt for status reporting
-
-## Development
-
-### Local Development
-
-```bash
-# Install dependencies
-make install
-
-# Run code quality checks
-make check
-
-# Format code
-make format
-
-# Run tests
-make test
-```
-
-### Docker Development
-
-```bash
-# Build development image
-make build-dev
-
-# Start development environment
-make dev
-
-# Access container shell
-make shell-dev
-
-# View logs
-make logs-dev
-```
-
-### Database Initialization
-
-The development environment includes sample data:
-
-```sql
--- Sample schemas: sales, analytics, staging
--- Sample tables: customers, orders, products, daily_sales
--- Sample data: 3 customers, 4 products, 3 orders
-```
-
-## API Usage
-
-### SSE Transport
-
-```bash
-# Connect to MCP server
-curl -N http://localhost:8000/
-
-# Health check
-curl http://localhost:8000/health
-```
-
-### Example Queries
+The `run_query_safely` tool prevents accidental large result sets:
 
 ```python
-# List tables in sales schema
-await execute_query("SELECT table_name FROM v_catalog.tables WHERE table_schema = 'sales'")
-
-# Get customer orders
-await execute_query("SELECT * FROM sales.customer_orders")
-
-# Analyze query performance
-await explain_query("SELECT * FROM sales.orders WHERE total_amount > 100")
-
-# Check database health
-await check_vertica_health()
+# Automatically detects large results
+await run_query_safely(
+    query="SELECT * FROM large_table",
+    row_threshold=1000,  # Warn if >1000 rows
+    proceed=False  # Don't proceed without confirmation
+)
 ```
 
-## Troubleshooting
+### Performance Profiling
+
+```python
+# Get detailed execution plan
+await profile_query(
+    query="SELECT * FROM sales.orders JOIN sales.customers ON ..."
+)
+```
+
+### System Monitoring
+
+```python
+# Monitor system performance
+await get_system_performance(
+    window_minutes=15,
+    bucket="minute",
+    top_n=5
+)
+```
+
+## 🧪 Development
+
+### Project Structure
+
+```
+vertica-mcp/
+├── vertica_mcp/
+│   ├── __init__.py       # Package initialization
+│   ├── cli.py            # CLI interface
+│   ├── server.py         # MCP server implementation
+│   ├── connection.py     # Database connection management
+│   └── utils.py          # Utility functions
+├── .env                  # Environment configuration
+├── pyproject.toml        # Project configuration
+├── setup.py             # Setup configuration
+└── README.md            # This file
+```
+
+### Running Tests
+
+```bash
+# Install development dependencies
+uv pip install -e ".[dev]"
+
+# Run tests
+pytest tests/
+
+# Run with coverage
+pytest --cov=vertica_mcp tests/
+```
+
+### Code Quality
+
+```bash
+# Format code
+black vertica_mcp/
+isort vertica_mcp/
+
+# Lint code
+pylint vertica_mcp/
+mypy vertica_mcp/
+```
+
+## 🐛 Troubleshooting
 
 ### Common Issues
 
-1. **Vertica not starting**: Ensure sufficient RAM (4GB+)
-2. **Connection refused**: Wait for Vertica to fully initialize
-3. **Permission denied**: Check schema permissions in environment variables
-
-### Debug Commands
-
+#### Connection Refused
 ```bash
-# Check container status
-docker-compose ps
+# Check Vertica is running
+vsql -h localhost -U dbadmin -d your_database
 
-# View detailed logs
-docker-compose logs vertica-mcp
-
-# Test database connectivity
-make db-test
-
-# Access database directly
-docker-compose exec vertica /opt/vertica/bin/vsql -U dbadmin -d VMart
+# Test network connectivity
+telnet localhost 5433
 ```
 
-### Health Checks
+#### MCP Server Not Showing in Claude
+1. Verify configuration in `claude_desktop_config.json`
+2. Check server logs: `vertica-mcp -vv`
+3. Restart Claude Desktop completely
+4. Test with MCP Inspector first
+
+#### Large Query Results
+- Use `run_query_safely` with appropriate `row_threshold`
+- Implement pagination with `query_page`
+- Consider using `stream_query` for very large datasets
+
+### Debug Mode
+
+Enable detailed logging:
 
 ```bash
-# Service health
-make health
+# Maximum verbosity
+vertica-mcp -vvv
 
-# Database health
-curl http://localhost:8000/health
-
-# Container health
-docker-compose ps
+# Write logs to file
+vertica-mcp -vv 2> debug.log
 ```
 
-## Production Deployment
+## 📚 Documentation
 
-### Security Considerations
+- [MCP Specification](https://spec.modelcontextprotocol.io/)
+- [Vertica Python Client](https://github.com/vertica/vertica-python)
+- [FastMCP Documentation](https://github.com/modelcontextprotocol/fastmcp)
+- [Claude Desktop Guide](https://modelcontextprotocol.io/quickstart/user)
 
-1. **Change default passwords**
-2. **Enable SSL/TLS**
-3. **Restrict operation permissions**
-4. **Use secrets management**
-5. **Enable logging and monitoring**
+## 🤝 Contributing
 
-### Scaling
-
-```bash
-# Scale MCP server
-docker-compose up -d --scale vertica-mcp=3
-
-# Use load balancer
-docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
-```
-
-## Contributing
+Contributions are welcome! Please feel free to submit a Pull Request.
 
 1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Run tests and checks: `make check`
-5. Submit a pull request
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
 
-## License
+## 📄 License
 
-[Your License Here]
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## Support
+## 🙏 Acknowledgments
 
-For issues and questions:
-- Create an issue in the repository
-- Check the troubleshooting section
-- Review the logs: `make logs`
+- [Anthropic](https://www.anthropic.com/) for developing the Model Context Protocol
+- [Vertica](https://www.vertica.com/) for the powerful analytics database
+- The MCP community for continuous improvements and support
 
+## 📞 Support
 
+- **Issues**: [GitHub Issues](https://github.com/zaboura/vertica-mcp/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/zaboura/vertica-mcp/discussions)
+- **Email**: support@your-domain.com
+
+---
+
+<p align="center">
+Built with ❤️ for the AI and Database community
+</p>
