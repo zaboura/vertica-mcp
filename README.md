@@ -91,6 +91,9 @@ pip install uv
 ```bash
 # Create virtual environment and install dependencies
 uv venv
+#activate the environment in case it is not activated
+source .venv/bin/activate
+# install the package
 uv pip install -e .
 
 # Or install all dependencies at once
@@ -138,9 +141,6 @@ The server supports multiple transport protocols:
 
 #### STDIO Transport (Default)
 ```bash
-# Basic usage
-vertica-mcp
-
 # With verbose logging
 vertica-mcp -v
 
@@ -151,33 +151,24 @@ vertica-mcp --env-file production.env
 #### SSE Transport (HTTP Server-Sent Events)
 ```bash
 # Start SSE server on default port 8000
-vertica-mcp --transport sse
+vertica-mcp --transport sse 
+
+# With verbose logging
+vertica-mcp --transport sse -vvv
 
 # Custom port and host
 vertica-mcp --transport sse --port 3000 --bind-host 0.0.0.0
 
 # With database override
-vertica-mcp --transport sse --host db.example.com --database production_db
+vertica-mcp --transport sse --host db.example.com --database production_db --user user_name --password your_password 
 ```
+Use `vertica-mcp --help` for more options
 
-### Option 2: Using Python Module
-
-```bash
-# STDIO transport
-python -m vertica_mcp.cli
-
-# SSE transport with options
-python -m vertica_mcp.cli --transport sse --port 8000 -vv
-```
-
-### Option 3: Using uv run
+### Option 2: Using uv run
 
 ```bash
 # Run with uv directly
 uv run vertica-mcp --transport sse --port 8000
-
-# Or from the server module
-uv run python vertica_mcp/server.py
 ```
 
 ## 🔍 Testing with MCP Inspector
@@ -186,15 +177,20 @@ MCP Inspector is a visual debugging tool for MCP servers. It's invaluable for te
 
 ### Installation and Usage
 
+
 ```bash
-# Install MCP Inspector globally
+# Run mcp with MCP Inspector (it will ask you to install it if you want to proceed)
+mcp dev vertica_mcp/server.py
+
+
+#OR install MCP Inspector globally
 npm install -g @modelcontextprotocol/inspector
 
 # Run inspector from your project directory
 cd vertica-mcp
 npx @modelcontextprotocol/inspector vertica_mcp/server.py
 
-# The inspector UI will open at http://localhost:5173
+# The inspector UI will open at http://localhost:6274
 ```
 
 ### Using the Inspector
@@ -257,16 +253,20 @@ npx @modelcontextprotocol/inspector vertica_mcp/server.py
   "mcpServers": {
     "vertica-mcp-sse": {
       "command": "npx",
-      "args": ["@modelcontextprotocol/remote", "http://localhost:8000/sse"]
+      "args": ["-y", "mcp-remote", "http://localhost:8000/sse"]
     }
   }
 }
 ```
 
 4. **Restart Claude Desktop**
-   - Quit and restart Claude Desktop
-   - Look for the MCP indicator (🔌) in the chat input area
+   - Quit and restart Claude Desktop (if it didn't work end the task from Task Manager)
+   - Look for the MCP indicator (🔌) or (+) in the chat input area
    - Click it to see available tools
+
+##### Note: if you are facing this error `[vertica-mcp] [error] spawn uv` you need to spesify the comple path to uv 
+On Mac/Linux : which uv  # shows the path
+On Windows: Get-Command uv  # shows the path
 
 ### Usage Examples
 
