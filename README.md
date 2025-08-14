@@ -106,7 +106,7 @@ Create a `.env` file in the project root:
 
 ```bash
 # Database Connection
-VERTICA_HOST=localhost
+VERTICA_HOST=host
 VERTICA_PORT=5433
 VERTICA_DATABASE=your_database
 VERTICA_USER=your_username
@@ -162,7 +162,76 @@ vertica-mcp --transport sse --port 3000 --bind-host 0.0.0.0
 # With database override
 vertica-mcp --transport sse --host db.example.com --database production_db --user user_name --password your_password 
 ```
-Use `vertica-mcp --help` for more options
+
+#### 🆕 HTTP Transport (Streamable HTTP)
+
+The Streamable HTTP transport exposes a **single endpoint** (default: `/mcp`) and is ideal for remote clients.
+
+```bash
+# Basic (recommended defaults)
+vertica-mcp --transport http
+
+# Custom endpoint and behavior
+vertica-mcp --transport http \
+  --port 8000 --bind-host 0.0.0.0 \
+  --http-path /mcp \
+  --http-stateless \
+  --no-http-json
+```
+
+- `--http-path` — the single Streamable HTTP endpoint (default /mcp)
+- `--http-stateless` — stateless sessions (recommended for remote clients)
+- `--no-http-json` — prefer streaming over batch JSON responses
+
+_Use `vertica-mcp --help` for more options_
+
+#### Quick test requests
+
+##### **macOS / Linux (curl)**
+
+Initialize the MCP session:
+```bash
+curl -s http://localhost:8000/mcp   -H 'Content-Type: application/json'   -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"0.1.0","capabilities":{},"clientInfo":{"name":"test","version":"1.0.0"}}}'
+```
+
+List tools:
+```bash
+curl -s http://localhost:8000/mcp   -H 'Content-Type: application/json'   -d '{"jsonrpc":"2.0","id":2,"method":"tools/list"}'
+```
+
+##### **Windows PowerShell (Invoke-RestMethod)**
+
+```powershell
+# Common headers for Streamable HTTP
+$headers = @{
+  "Accept"       = "application/json, text/event-stream"
+  "Content-Type" = "application/json"
+}
+
+# Initialize
+$init = @{
+  jsonrpc = "2.0"
+  id      = 1
+  method  = "initialize"
+  params  = @{
+    protocolVersion = "0.1.0"
+    capabilities    = @{}
+    clientInfo      = @{ name = "test"; version = "1.0.0" }
+  }
+} | ConvertTo-Json -Depth 8
+
+Invoke-RestMethod -Uri "http://localhost:8000/mcp" -Method Post -Headers $headers -Body $init
+```
+```powershell
+# List tools
+$list = @{
+  jsonrpc = "2.0"
+  id      = 2
+  method  = "tools/list"
+} | ConvertTo-Json -Depth 4
+
+Invoke-RestMethod -Uri "http://localhost:8000/mcp" -Method Post -Headers $headers -Body $list
+```
 
 ### Option 2: Using uv run
 
@@ -216,6 +285,7 @@ npx @modelcontextprotocol/inspector vertica_mcp/server.py
 3. **Add Server Configuration**
 
 #### For STDIO Transport:
+
 ```json
 {
   "mcpServers": {
@@ -248,6 +318,7 @@ npx @modelcontextprotocol/inspector vertica_mcp/server.py
 ```
 
 #### For SSE Transport:
+
 ```json
 {
   "mcpServers": {
@@ -258,6 +329,34 @@ npx @modelcontextprotocol/inspector vertica_mcp/server.py
   }
 }
 ```
+
+#### For HTTP transport:
+
+```json
+{
+  "mcpServers": {
+    "vertica-mcp-http": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "http://localhost:8000/mcp"],
+    }
+  }
+}
+```
+
+> Tip: When exposing the server beyond localhost, use `--bind-host 0.0.0.0` and consider enabling authentication in production.
+
+---
+
+#### 🛠️ CLI Options Reference (HTTP additions)
+
+> Append these rows to your **CLI Options Reference** table.
+
+| Option | Description | Default |
+|---|---|---|
+| `--http-path PATH` | Endpoint path for Streamable HTTP | `/mcp` |
+| `--[no-]http-json` | Prefer batch JSON responses instead of streaming | `false` |
+| `--http-stateless / --http-stateful` | Use stateless sessions (recommended for remote) | `true` |
+
 
 4. **Restart Claude Desktop**
    - Quit and restart Claude Desktop (if it didn't work end the task from Task Manager)
@@ -280,6 +379,75 @@ Once connected, you can ask Claude:
 "Monitor system performance for the last 15 minutes"
 ```
 
+## 🧭 Cursor Integration (MCP)
+Set up Cursor so it can connect to your Vertica MCP server by creating a **`mcp.json`** file and adding one of the configurations below (reuse the same server details already documented in this README).
+
+### Where to put `mcp.json`
+- **Global (per user)**
+  - macOS/Linux: `~/.cursor/mcp.json`
+  - Windows: `%UserProfile%\.cursor\mcp.json`
+- **Per project**
+  - `<your-project>/.cursor/mcp.json`
+
+> ⚠️ `mcp.json` must be **strict JSON** (no trailing commas or comments).
+
+---
+
+### Option A — Remote via **Streamable HTTP** (recommended)
+Points Cursor to your single `/mcp` endpoint (as described in the HTTP Transport section).
+
+```json
+{
+  "mcpServers": {
+    "vertica-mcp-http": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "http://localhost:8000/mcp"]
+    }
+  }
+}
+```
+---
+
+### Option B — Local via **stdio** (Cursor launches your server)
+Cursor runs your command and communicates over stdin/stdout. The environment values mirror the ones already used in this README.
+
+```json
+{
+  "mcpServers": {
+    "vertica-mcp": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--with", "mcp[cli]",
+        "--with", "vertica-python",
+        "--with", "python-dotenv",
+        "--with", "pydantic",
+        "--with", "starlette",
+        "--with", "uvicorn",
+        "mcp",
+        "run",
+        "/path/to/vertica-mcp/vertica_mcp/server.py"
+      ],
+      "env": {
+        "PYTHONPATH": "/path/to/vertica-mcp",
+        "VERTICA_HOST": "localhost",
+        "VERTICA_PORT": "5433",
+        "VERTICA_DATABASE": "your_database",
+        "VERTICA_USER": "your_username",
+        "VERTICA_PASSWORD": "your_password",
+        "VERTICA_CONNECTION_LIMIT": "10"
+      }
+    }
+  }
+}
+```
+
+---
+
+### Finish up
+- **Restart Cursor** to reload the MCP configuration.
+- In a chat, check **Available Tools** to confirm the server is detected.
+- If anything fails, open **Output → MCP Logs** in Cursor for details.
 ## 🛠️ CLI Options Reference
 
 ```bash
