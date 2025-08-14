@@ -378,7 +378,7 @@ async def run_query_safely(
 
     if mode == "page":
         # Reuse your paging implementation
-        return await query_page(
+        return await execute_query_paginated(
             ctx=ctx,
             query=query,
             limit=page_limit,
@@ -389,7 +389,7 @@ async def run_query_safely(
     if mode == "stream":
         # Streaming returns a giant JSON in your current impl – not ideal.
         # If you insist, call it; otherwise prefer paging.
-        return await stream_query(
+        return await execute_query_stream(
             ctx=ctx, query=query, batch_size=max(page_limit, 1000)
         )
 
@@ -397,7 +397,7 @@ async def run_query_safely(
 
 
 @mcp.tool()
-async def query_page(
+async def execute_query_paginated(
     ctx: Context,
     query: str,
     limit: int = 2000,
@@ -416,7 +416,7 @@ async def query_page(
         "columns": List[str]       # optional, only when include_columns=True
       }
     """
-    await ctx.info(f"query_page(limit={limit}, offset={offset})")
+    await ctx.info(f"execute_query_paginated(limit={limit}, offset={offset})")
     manager = ctx.request_context.lifespan_context.get("vertica_manager")
     if not manager:
         await ctx.error("No database connection manager available")
@@ -425,7 +425,7 @@ async def query_page(
     # Basic safety: SELECT-only
     op = extract_operation_type(query)
     if op:
-        raise RuntimeError("query_page only supports SELECT statements")
+        raise RuntimeError("execute_query_paginated only supports SELECT statements")
 
     # Wrap the user query to safely apply LIMIT/OFFSET
     paged_sql = f"{_wrap_subquery(query)} LIMIT {int(limit)} OFFSET {int(offset)}"
@@ -454,7 +454,7 @@ async def query_page(
             resp["columns"] = cols
         return resp
     except Exception as e:
-        msg = f"Error in query_page: {str(e)}"
+        msg = f"Error in execute_query_paginated: {str(e)}"
         await ctx.error(msg)
         raise RuntimeError(msg) from e
     finally:
@@ -465,7 +465,7 @@ async def query_page(
 
 
 @mcp.tool()
-async def stream_query(ctx: Context, query: str, batch_size: int = 1000) -> dict:
+async def execute_query_stream(ctx: Context, query: str, batch_size: int = 1000) -> dict:
     """Execute a SQL query and return results in batches with pagination support.
 
     Args:
@@ -614,7 +614,7 @@ async def get_table_structure(
 
 
 @mcp.tool()
-async def list_projections(
+async def get_table_projections(
     ctx: Context, table_name: str, schema_name: str = "public"
 ) -> dict:
     """List all projections for a specific Vertica table.
@@ -676,7 +676,7 @@ async def list_projections(
 
 
 @mcp.tool()
-async def list_views(ctx: Context, schema_name: str = "public") -> dict:
+async def get_schema_views(ctx: Context, schema_name: str = "public") -> dict:
     """List all views in a specific Vertica schema.
 
     Args:
@@ -726,7 +726,7 @@ async def list_views(ctx: Context, schema_name: str = "public") -> dict:
 
 
 @mcp.tool()
-async def list_tables(ctx: Context, schema_name: str = "public") -> dict:
+async def get_schema_tables(ctx: Context, schema_name: str = "public") -> dict:
     """List all tables in a specific Vertica schema.
 
     Args:
@@ -774,7 +774,7 @@ async def list_tables(ctx: Context, schema_name: str = "public") -> dict:
 
 
 @mcp.tool()
-async def list_schemas(ctx: Context) -> dict:
+async def get_database_schemas(ctx: Context) -> dict:
     """List all schemas in the Vertica database.
 
     Args:
@@ -1060,7 +1060,7 @@ async def profile_query(ctx: Context, query: str) -> dict:
 
 
 @mcp.tool()
-async def get_system_performance(
+async def analyze_system_performance(
     ctx: Context,
     window_minutes: int = 15,
     bucket: str = "minute",  # "second" | "minute" | "hour"
@@ -1306,19 +1306,14 @@ async def sql_query_safety_guard() -> str:
 
 
 @mcp.prompt()
-async def vertica_performance_analyzer(query: str) -> str:
+async def vertica_performance_analyzer() -> str:
     """
     🚀 Vertica Performance Analyzer - Deep-dive query performance analysis with actionable optimization recommendations.
     
-    Analyzes query execution plans, identifies bottlenecks, and provides concrete DDL suggestions
+    Analyzes the given query execution plans, identifies bottlenecks, and provides concrete DDL suggestions
     for optimal Vertica projections, join strategies, and ROS container health.
     """
-    return f"""🔍 VERTICA PERFORMANCE ANALYSIS
-
-QUERY TO ANALYZE:
-```sql
-{query}
-```
+    return """🔍 VERTICA PERFORMANCE ANALYSIS
 
 ANALYSIS WORKFLOW:
 1) **PROFILE EXECUTION**: Call `profile_query` to get actual runtime and execution plan
@@ -1344,25 +1339,23 @@ OUTPUT SECTIONS:
 
 RULES:
 - Start with `profile_query` - no exceptions
-- Use `query_page` for large result sets, never full table scans
+- Use `execute_query_paginated` for large result sets, never full table scans
 - Normalize projection names (strip _b0/_b1 suffixes)
 - Be specific: exact column lists, not generic advice
 - Flag urgent issues: >5000 ROS containers, inefficient operators"""
 
 
 @mcp.prompt()
-async def vertica_sql_assistant(task: str) -> str:
+async def vertica_sql_assistant() -> str:
     """
     💡 Vertica SQL Assistant - Expert SQL query generation with Vertica-specific optimizations.
     
     Generates efficient, Vertica-optimized SQL queries for any data task with proper
     function usage, performance considerations, and best practices.
     """
-    return f"""📝 VERTICA SQL QUERY GENERATION
+    return """📝 VERTICA SQL QUERY GENERATION
 
-TASK: {task}
-
-As a Vertica SQL expert, I'll write an optimized query for this task.
+As a Vertica SQL expert, I'll write an optimized query for the given task.
 
 VERTICA BEST PRACTICES:
 ✅ **Functions**: Use Vertica-specific functions (REGEXP_REPLACE, REGEXP_LIKE, APPROXIMATE_COUNT_DISTINCT, etc.)
@@ -1373,7 +1366,7 @@ VERTICA BEST PRACTICES:
 ✅ **Formatting**: Clear, readable SQL with proper indentation
 
 APPROACH:
-1. If schema exploration needed → use `list_tables`, `list_schemas`, `get_table_structure`
+1. If schema exploration needed → use `get_schema_tables`, `get_database_schemas`, `get_table_structure`
 2. Write efficient, well-formatted SQL
 3. Include comments explaining Vertica-specific optimizations
 4. Suggest projection improvements if applicable
@@ -1450,7 +1443,7 @@ async def vertica_system_monitor() -> str:
 GOAL: Quick system health check with actionable insights
 
 WORKFLOW:
-1. Call `get_system_performance` for real-time metrics
+1. Call `analyze_system_performance` for real-time metrics
 2. Generate fast, focused dashboard
 
 DASHBOARD COMPONENTS:
