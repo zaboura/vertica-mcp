@@ -49,10 +49,10 @@ The Model Context Protocol (MCP) is an open standard developed by Anthropic that
 | Prompt | Purpose |
 |--------|---------|
 | `sql_query_safety_guard` | Prevents accidental large result sets |
-| `vertica_performance_analyzer` | Deep-dive query performance analysis |
+| `vertica_query_performance_analyzer` | Deep-dive query performance analysis |
 | `vertica_sql_assistant` | Generate optimized Vertica SQL queries |
-| `vertica_health_dashboard` | Comprehensive database status visualization |
-| `vertica_system_monitor` | Real-time performance monitoring |
+| `vertica_database_health_dashboard` | Comprehensive database status visualization |
+| `vertica_database_system_monitor` | Real-time performance monitoring |
 
 ## 📋 Prerequisites
 

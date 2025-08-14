@@ -465,7 +465,9 @@ async def execute_query_paginated(
 
 
 @mcp.tool()
-async def execute_query_stream(ctx: Context, query: str, batch_size: int = 1000) -> dict:
+async def execute_query_stream(
+    ctx: Context, query: str, batch_size: int = 1000
+) -> dict:
     """Execute a SQL query and return results in batches with pagination support.
 
     Args:
@@ -1289,6 +1291,7 @@ async def analyze_system_performance(
         if conn:
             manager.release_connection(conn)
 
+
 @mcp.prompt()
 async def sql_query_safety_guard() -> str:
     """
@@ -1306,10 +1309,10 @@ async def sql_query_safety_guard() -> str:
 
 
 @mcp.prompt()
-async def vertica_performance_analyzer() -> str:
+async def vertica_query_performance_analyzer() -> str:
     """
     🚀 Vertica Performance Analyzer - Deep-dive query performance analysis with actionable optimization recommendations.
-    
+
     Analyzes the given query execution plans, identifies bottlenecks, and provides concrete DDL suggestions
     for optimal Vertica projections, join strategies, and ROS container health.
     """
@@ -1349,7 +1352,7 @@ RULES:
 async def vertica_sql_assistant() -> str:
     """
     💡 Vertica SQL Assistant - Expert SQL query generation with Vertica-specific optimizations.
-    
+
     Generates efficient, Vertica-optimized SQL queries for any data task with proper
     function usage, performance considerations, and best practices.
     """
@@ -1380,10 +1383,10 @@ RULE: CHECK THE DOCUMENTATION FOR THE FUNCTIONS FIRST BEFORE USING THEM"""
 
 
 @mcp.prompt()
-async def vertica_health_dashboard() -> str:
+async def vertica_database_health_dashboard() -> str:
     """
     📊 Vertica Health Dashboard - Comprehensive database status and usage analytics.
-    
+
     Generates visual dashboards showing database version, storage usage, performance trends,
     and capacity utilization with charts and key metrics.
     """
@@ -1431,10 +1434,10 @@ OUTPUT FORMAT:
 
 
 @mcp.prompt()
-async def vertica_system_monitor() -> str:
+async def vertica_database_system_monitor() -> str:
     """
     ⚡ Vertica System Monitor - Real-time performance monitoring with resource analysis.
-    
+
     Fast dashboard showing CPU, memory, network usage, resource pools, and top consumers
     with immediate insights and alerts for system optimization.
     """
