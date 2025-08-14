@@ -6,12 +6,15 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "click>=8.2.1",
-    "mcp[cli]>=1.11.0",
+    "mcp[cli]>=1.8.0",
     "python-dotenv>=1.1.1",
     "vertica-python>=1.4.0",
     "setuptools>=61.0",
     "starlette>=0.46",
-    "uvicorn>=0.34"
+    "uvicorn>=0.34",
+    "black>=25.1.0",
+    "pylint>=3.3.8",
+    "fastmcp>=2.11.3",
 ]
 [project.scripts]
 vertica-mcp = "vertica_mcp.cli:cli"

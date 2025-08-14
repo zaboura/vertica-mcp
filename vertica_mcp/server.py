@@ -105,6 +105,60 @@ async def run_sse(host: str = "localhost", port: int = 8000) -> None:
         logger.error(f"Server error: {e}")
         raise
 
+async def run_http(
+    host: str = "127.0.0.1",
+    port: int = 8000,
+    path: str = "/mcp",
+    json_response: bool = False,
+    stateless_http: bool = True,
+) -> None:
+    """
+    Launch the MCP server with Streamable HTTP transport.
+    - Single endpoint (default /mcp) per MCP spec
+    - json_response=False → stream via SSE; True → batch JSON when possible
+    - stateless_http=True is ideal for remote clients
+    """
+    logger.info(f"Starting MCP server with Streamable HTTP on {host}:{port}{path}")
+
+    # Apply runtime settings to FastMCP
+    mcp.settings.host = host
+    mcp.settings.port = port
+    mcp.settings.streamable_http_path = path
+    mcp.settings.json_response = json_response
+    mcp.settings.stateless_http = stateless_http
+
+    http_app = mcp.streamable_http_app()
+
+    # Pretty banner
+    print(f"\n╔{'═' * 50}╗")
+    print(f"║{'Vertica MCP Server':^50}║")
+    print(f"╠{'═' * 50}╣")
+    print(f"║  Transport : Streamable HTTP{' ' * 18}║")
+    ep = f"http://{host}:{port}{path}"
+    pad = max(0, 38 - len(ep))
+    print(f"║  Endpoint  : {ep}{' ' * pad}║")
+    print(f"║  Status    : Ready{' ' * 31}║")
+    print(f"╚{'═' * 50}╝\n")
+    print(f"📝 Connect MCP clients to: {ep}")
+    print(f"   Tip: endpoint must be the Streamable HTTP path (default /mcp)\n")
+
+    config = uvicorn.Config(
+        http_app,
+        host=host,
+        port=port,
+        log_level="info",
+        access_log=True,
+        use_colors=True,
+    )
+    server = uvicorn.Server(config)
+    try:
+        await server.serve()
+    except KeyboardInterrupt:
+        logger.info("Received interrupt signal, shutting down gracefully")
+    except Exception as e:
+        logger.error(f"Server error: {e}")
+        raise
+
 
 @asynccontextmanager
 async def server_lifespan(_server: FastMCP) -> AsyncIterator[dict[str, Any]]:

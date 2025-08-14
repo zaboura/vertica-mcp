@@ -10,7 +10,7 @@ import logging
 import os
 import click
 from dotenv import load_dotenv
-from .server import mcp, run_sse
+from .server import mcp, run_sse, run_http
 from .utils import setup_logger
 from .connection import (
     VERTICA_HOST,
@@ -40,6 +40,9 @@ def main(
     connection_limit: int | None,
     ssl: bool | None,
     ssl_reject_unauthorized: bool | None,
+    http_path: str,
+    http_json: bool,
+    http_stateless: bool,
 ) -> None:
     """MCP Vertica Server - Vertica functionality for MCP"""
     setup_logger(verbose)
@@ -71,13 +74,26 @@ def main(
         os.environ[VERTICA_SSL_REJECT_UNAUTHORIZED] = str(
             ssl_reject_unauthorized
         ).lower()
-
-    if transport == "sse":
-        # Use bind_host for server binding, not database connection
+        
+    if transport.lower() == "sse":
         logging.info(f"Launching SSE transport on {bind_host}:{port}")
         asyncio.run(run_sse(host=bind_host, port=port))
+    elif transport.lower() in ("http", "streamable-http"):
+        logging.info(
+            f"Launching Streamable HTTP on {bind_host}:{port}{http_path} "
+            f"(json_response={http_json}, stateless={http_stateless})"
+        )
+        asyncio.run(
+            run_http(
+                host=bind_host,
+                port=port,
+                path=http_path,
+                json_response=http_json,
+                stateless_http=http_stateless,
+            )
+        )
     else:
-        mcp.run()
+        mcp.run()  # stdio
 
 
 @click.command()
@@ -92,9 +108,9 @@ def main(
 )
 @click.option(
     "--transport",
-    type=click.Choice(["stdio", "sse", "http"], case_sensitive=False),
+    type=click.Choice(["stdio", "sse", "http", "streamable-http"], case_sensitive=False),
     default="stdio",
-    help="Transport type (stdio, sse [deprecated], or http [recommended])",
+    help="Transport type (stdio, sse, http/streamable-http).",
 )
 @click.option(
     "--port",
@@ -146,8 +162,23 @@ def main(
     default=True,
     help="Reject unauthorized SSL certificates",
 )
+@click.option(
+    "--http-path",
+    default="/mcp",
+    show_default=True,
+    help="Endpoint path for Streamable HTTP.",
+)
+@click.option(
+    "--http-json/--no-http-json",
+    default=False,
+    show_default=True,
+    help="Return batch JSON responses when possible (otherwise stream).",
+)
+@click.option(
+    "--http-stateless/--http-stateful",
+    default=True,
+    show_default=True,
+    help="Use stateless Streamable HTTP sessions (recommended for remote clients).",
+)
 def cli(**kwargs):
-    """Command-line interface for MCP Vertica Server
-    This function sets up the command-line interface using Click and calls the main function.
-    """
     main(**kwargs)
