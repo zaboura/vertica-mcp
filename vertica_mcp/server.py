@@ -133,9 +133,9 @@ async def run_http(
     print(f"\n╔{'═' * 50}╗")
     print(f"║{'Vertica MCP Server':^50}║")
     print(f"╠{'═' * 50}╣")
-    print(f"║  Transport : Streamable HTTP{' ' * 18}║")
+    print(f"║  Transport : Streamable HTTP{' ' * 21}║")
     ep = f"http://{host}:{port}{path}"
-    pad = max(0, 38 - len(ep))
+    pad = max(0, 36 - len(ep))
     print(f"║  Endpoint  : {ep}{' ' * pad}║")
     print(f"║  Status    : Ready{' ' * 31}║")
     print(f"╚{'═' * 50}╝\n")
