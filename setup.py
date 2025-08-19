@@ -12,8 +12,12 @@ setup(
     },
     install_requires=[
         "click>=8.2.1",
-        "mcp[cli]>=1.11.0",
+        "mcp[cli]>=1.8.0",
         "python-dotenv>=1.1.1",
         "vertica-python>=1.4.0",
+        "setuptools>=61.0",
+        "starlette>=0.46",
+        "uvicorn>=0.34",
+        "fastmcp>=2.11.3"
     ],
 )
