@@ -1,323 +1,311 @@
 # Vertica MCP Server
 
-<p align="center">
-  <img src="https://img.shields.io/badge/MCP-1.0-blue.svg" alt="MCP Version">
-  <img src="https://img.shields.io/badge/Python-3.11+-green.svg" alt="Python Version">
-  <img src="https://img.shields.io/badge/Vertica-24.x+-orange.svg" alt="Vertica Version">
-  <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License">
-</p>
+<div align="center">
 
-A powerful Model Context Protocol (MCP) server for Vertica Analytics Database, enabling AI assistants like Claude to directly interact with your Vertica database through standardized tools and prompts.
+![Vertica MCP Banner](https://img.shields.io/badge/Vertica_MCP-Enterprise_Analytics-00A0E3?style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTYiIGhlaWdodD0iMTYiIHZpZXdOb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTggMTZDMTIuNDE4MyAxNiAxNiAxMi40MTgzIDE2IDhDMTYgMy41ODE3MiAxMi40MTgzIDAgOCAwQzMuNTgxNzIgMCAwIDMuNTgxNzIgMCA4QzAgMTIuNDE4MyAzLjU4MTcyIDE2IDggMTZ6IiBmaWxsPSIjMDBBMEUzIi8+Cjwvc3ZnPg==)
 
-## 🎯 Overview
+**Transform your Vertica Analytics Database into an AI-powered intelligence layer**
 
-The Vertica MCP Server bridges the gap between AI language models and your Vertica database, providing secure, controlled access to database operations through the Model Context Protocol. This enables Claude and other MCP-compatible AI assistants to query, analyze, and manage your Vertica databases with natural language commands.
+[![MCP Version](https://img.shields.io/badge/MCP-2025--06--18-blue.svg)](https://spec.modelcontextprotocol.io/)
+[![Python Version](https://img.shields.io/badge/Python-3.11+-green.svg)](https://www.python.org/)
+[![Vertica Version](https://img.shields.io/badge/Vertica-24.x+-orange.svg)](https://www.vertica.com/)
+[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg?logo=docker)](https://hub.docker.com/)
+[![CI/CD](https://img.shields.io/github/actions/workflow/status/zaboura/vertica-mcp/ci.yml?label=CI/CD)](https://github.com/zaboura/vertica-mcp/actions)
+
+[🚀 Quick Start](#-quick-start) • [📖 Documentation](#-documentation) • [🎯 Features](#-features) • [🤝 Contributing](#-contributing) • [💬 Community](#-community)
+
+</div>
+
+---
+
+## 🌟 Why Vertica MCP?
+
+The **Vertica MCP Server** is a production-ready implementation of the [Model Context Protocol](https://modelcontextprotocol.io/) that transforms your Vertica Analytics Database into an intelligent, AI-accessible data platform. Built with enterprise security and performance in mind, it enables AI assistants like Claude, ChatGPT, and Cursor to directly query, analyze, and optimize your Vertica databases through natural language.
 
 ### What is MCP?
 
 The Model Context Protocol (MCP) is an open standard developed by Anthropic that provides a universal way for AI assistants to connect with external tools and data sources. Think of it as "USB-C for AI" - a standardized interface that allows any MCP-compatible AI to interact with your systems without custom integrations.
 
-## ✨ Features
+### 🎯 Key Benefits
 
-### Core Capabilities
-- **🔍 Query Execution**: Execute SELECT queries with automatic pagination and safety controls
-- **📊 Performance Analysis**: Profile queries and get execution plans with optimization recommendations
-- **🗂️ Schema Management**: List and explore tables, views, projections, and schemas
-- **💾 Streaming Support**: Handle large result sets with efficient streaming and pagination
-- **🔒 Security**: Configurable operation permissions at global and schema levels
-- **⚡ Connection Pooling**: Efficient connection management with configurable pool sizes
-- **🎨 AI Prompts**: Built-in intelligent prompts for query optimization and database analysis
+- **🔌 Universal AI Connectivity**: Connect any MCP-compatible AI to your Vertica database without custom integrations
+- **🛡️ Enterprise Security**: Fine-grained permissions at schema and operation levels with SSL/TLS support
+- **⚡ High Performance**: Connection pooling, query streaming, and automatic pagination for handling massive datasets
+- **🧠 AI-Optimized**: Built-in prompts and tools specifically designed for database analysis and optimization
+- **🔄 Multiple Transports**: Support for STDIO, HTTP, and SSE to fit any deployment scenario
+- **📊 Production Ready**: Battle-tested with comprehensive error handling, logging, and monitoring
 
-### Built-in Tools
-
-| Tool | Description |
-|------|-------------|
-| `run_query_safely` | Execute queries with automatic large result set detection and confirmation |
-| `execute_query_paginated` | Paginated query execution with LIMIT/OFFSET support |
-| `execute_query_stream` | Stream large result sets in batches |
-| `get_table_structure` | Get detailed table structure including columns and constraints |
-| `get_schema_tables` | List all tables in a schema |
-| `get_schema_views` | List all views in a schema |
-| `get_database_schemas` | List all database schemas |
-| `get_table_projections` | List projections for a specific table |
-| `database_status` | Get database health and usage statistics |
-| `profile_query` | Profile query performance and get execution plans |
-| `analyze_system_performance` | Monitor system performance metrics and resource usage |
-
-### AI-Powered Prompts
-
-| Prompt | Purpose |
-|--------|---------|
-| `sql_query_safety_guard` | Prevents accidental large result sets |
-| `vertica_query_performance_analyzer` | Deep-dive query performance analysis |
-| `vertica_sql_assistant` | Generate optimized Vertica SQL queries |
-| `vertica_database_health_dashboard` | Comprehensive database status visualization |
-| `vertica_database_system_monitor` | Real-time performance monitoring |
+---
 
 ## 📋 Prerequisites
 
 - **Python** 3.11 or higher
-- **Vertica Database** (accessible)
+- **Vertica Database** (accessible instance)
 - **uv** (Python package manager) - [Installation guide](https://github.com/astral-sh/uv)
-- **Claude Desktop** or another MCP-compatible client (optional)
+- **Docker** (optional, for containerized deployment)
+- **Claude Desktop** or another MCP-compatible client
+
+---
 
 ## 🚀 Quick Start
 
-### 1. Clone the Repository
+### Method 1: Local Installation (Recommended for Development)
 
 ```bash
+# 1. Clone the repository
 git clone https://github.com/zaboura/vertica-mcp.git
 cd vertica-mcp
-```
 
-### 2. Install uv (if not already installed)
-
-```bash
-# On macOS/Linux
+# 2. Install uv (if not already installed)
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# On Windows
-powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
-```
-Or, from [PyPi](https://pypi.org/project/uv/)
-
-
-```bash
-pip install uv
-```
-
-### 3. Set Up Python Environment
-
-```bash
-# Create virtual environment and install dependencies
-uv venv
-#activate the environment in case it is not activated
+# 3. Setup environment
+uv sync
 source .venv/bin/activate
-# install the package
+
+# 4. Install in development mode
 uv pip install -e .
 
-# Or install all dependencies at once
-uv sync
+# 5. Configure database connection
+cp .env.example .env
+# Edit .env with your Vertica credentials
+
+# 6. Run the server
+vertica-mcp  # STDIO for Claude Desktop
+# or
+vertica-mcp --transport http --port 8000 --bind-host 0.0.0.0  # HTTP for remote access
 ```
 
-### 4. Configure Database Connection
+### Method 2: Docker Deployment
 
-Create a `.env` file in the project root:
+#### Build Docker Image
 
 ```bash
-# Database Connection
-VERTICA_HOST=host
+# Build from Dockerfile
+docker build -t vertica-mcp:latest .
+
+# Or use docker-compose
+docker-compose build
+```
+
+#### Run with Docker Compose
+
+```bash
+# STDIO transport
+docker-compose up mcp-stdio
+
+# HTTP transport
+docker-compose up mcp-http
+
+# SSE transport  
+docker-compose up mcp-sse
+```
+
+#### Manual Docker Run
+
+```bash
+# HTTP transport
+docker run -d \
+  --name vertica-mcp-http \
+  -p 8000:8000 \
+  --env-file .env \
+  -e TRANSPORT=http \
+  -e BIND=0.0.0.0 \
+  -e PORT=8000 \
+  -e HTTP_PATH=/mcp \
+  vertica-mcp:latest
+
+# STDIO transport (direct MCP client connection)
+docker run -i --rm \
+  --name vertica-mcp-stdio \
+  --env-file .env \
+  vertica-mcp:latest
+```
+
+---
+
+## 🎯 Features
+
+### 🔧 Core Tools
+
+<table>
+<tr>
+<td width="50%">
+
+#### Query Execution
+- `run_query_safely` - Smart query execution with large result detection
+- `execute_query_paginated` - Efficient pagination for large datasets
+- `execute_query_stream` - Real-time streaming for massive results
+
+</td>
+<td width="50%">
+
+#### Schema Management
+- `get_database_schemas` - Explore database organization
+- `get_schema_tables` - List tables with metadata
+- `get_table_structure` - Detailed column and constraint info
+- `get_table_projections` - Vertica-specific projection analysis
+- `get_schema_views` - List all views in a schema
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+#### Performance Analysis
+- `profile_query` - Query execution plans and optimization
+- `analyze_system_performance` - Real-time resource monitoring
+- `database_status` - Health metrics and usage statistics
+
+</td>
+<td width="50%">
+
+#### AI-Powered Prompts
+- 🛡️ **SQL Safety Guard** - Prevents accidental large queries
+- 🚀 **Performance Analyzer** - Deep query optimization
+- 💡 **SQL Assistant** - Intelligent query generation
+- 📊 **Health Dashboard** - Visual database insights
+- ⚡ **System Monitor** - Real-time performance tracking
+
+</td>
+</tr>
+</table>
+
+### 🛡️ Security Features
+
+- **Multi-Level Permissions**: Global and schema-specific access controls
+- **SSL/TLS Encryption**: Secure database connections
+- **Connection Pooling**: Efficient resource management with configurable limits
+- **Read-Only Mode**: Default safe configuration for production
+- **OAuth Support**: Enterprise authentication for remote deployments
+
+---
+
+## 📖 Documentation
+
+### Configuration
+
+<details>
+<summary><b>Environment Variables (.env)</b></summary>
+
+```bash
+# Database Connection (Required)
+VERTICA_HOST=your_vertica_host
 VERTICA_PORT=5433
 VERTICA_DATABASE=your_database
 VERTICA_USER=your_username
 VERTICA_PASSWORD=your_password
 
-# Connection Pool
+# Connection Pool (Optional)
 VERTICA_CONNECTION_LIMIT=10
-VERTICA_LAZY_INIT=1  # Lazy connection initialization
+VERTICA_LAZY_INIT=1  # Delay connection until first use
 
-# SSL Configuration
+# SSL Configuration (Optional)
 VERTICA_SSL=false
 VERTICA_SSL_REJECT_UNAUTHORIZED=true
 
-# Operation Permissions (optional)
+# Security Permissions (Optional - defaults to read-only)
 ALLOW_INSERT_OPERATION=false
 ALLOW_UPDATE_OPERATION=false
 ALLOW_DELETE_OPERATION=false
 ALLOW_DDL_OPERATION=false
 
-# Schema-specific Permissions (optional)
-SCHEMA_INSERT_PERMISSIONS=public:true,sales:false
-SCHEMA_UPDATE_PERMISSIONS=public:true,sales:false
-SCHEMA_DELETE_PERMISSIONS=public:false,sales:false
-SCHEMA_DDL_PERMISSIONS=public:false,sales:false
+# Schema-specific Permissions (Optional)
+SCHEMA_INSERT_PERMISSIONS=staging:true,production:false
+SCHEMA_UPDATE_PERMISSIONS=staging:true,production:false
+SCHEMA_DELETE_PERMISSIONS=staging:false,production:false
+SCHEMA_DDL_PERMISSIONS=staging:false,production:false
 ```
 
-## 🏃 Running the Server
+</details>
 
-### Option 1: Using CLI (Recommended)
+### Client Integration
 
-The server supports multiple transport protocols:
+<details>
+<summary><b>Claude Desktop</b></summary>
 
-#### STDIO Transport (Default)
-```bash
-# With verbose logging
-vertica-mcp -v
+1. **Locate Configuration File**
+   - **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+   - **Windows**: `%APPDATA%/Claude/claude_desktop_config.json`
 
-# With custom environment file
-vertica-mcp --env-file production.env
-```
+2. **Add Server Configuration**
 
-#### SSE Transport (HTTP Server-Sent Events)
-```bash
-# Start SSE server on default port 8000
-vertica-mcp --transport sse 
-
-# With verbose logging
-vertica-mcp --transport sse -vvv
-
-# Custom port and host
-vertica-mcp --transport sse --port 3000 --bind-host 0.0.0.0
-
-# With database override
-vertica-mcp --transport sse --host db.example.com --database production_db --user user_name --password your_password 
-```
-
-#### 🆕 HTTP Transport (Streamable HTTP)
-
-The Streamable HTTP transport exposes a **single endpoint** (default: `/mcp`) and is ideal for remote clients.
-
-```bash
-# Basic (recommended defaults)
-vertica-mcp --transport http
-
-# Custom endpoint and behavior
-vertica-mcp --transport http \
-  --port 8000 --bind-host 0.0.0.0 \
-  --http-path /mcp \
-  --http-stateless \
-  --no-http-json
-```
-
-- `--http-path` — the single Streamable HTTP endpoint (default /mcp)
-- `--http-stateless` — stateless sessions (recommended for remote clients)
-- `--no-http-json` — prefer streaming over batch JSON responses
-
-_Use `vertica-mcp --help` for more options_
-
-#### Quick test requests
-
-##### **macOS / Linux (curl)**
-
-Initialize the MCP session:
-```bash
-curl -s http://localhost:8000/mcp   -H 'Content-Type: application/json'   -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"0.1.0","capabilities":{},"clientInfo":{"name":"test","version":"1.0.0"}}}'
-```
-
-List tools:
-```bash
-curl -s http://localhost:8000/mcp   -H 'Content-Type: application/json'   -d '{"jsonrpc":"2.0","id":2,"method":"tools/list"}'
-```
-
-##### **Windows PowerShell (Invoke-RestMethod)**
-
-```powershell
-# Common headers for Streamable HTTP
-$headers = @{
-  "Accept"       = "application/json, text/event-stream"
-  "Content-Type" = "application/json"
-}
-
-# Initialize
-$init = @{
-  jsonrpc = "2.0"
-  id      = 1
-  method  = "initialize"
-  params  = @{
-    protocolVersion = "0.1.0"
-    capabilities    = @{}
-    clientInfo      = @{ name = "test"; version = "1.0.0" }
-  }
-} | ConvertTo-Json -Depth 8
-
-Invoke-RestMethod -Uri "http://localhost:8000/mcp" -Method Post -Headers $headers -Body $init
-```
-```powershell
-# List tools
-$list = @{
-  jsonrpc = "2.0"
-  id      = 2
-  method  = "tools/list"
-} | ConvertTo-Json -Depth 4
-
-Invoke-RestMethod -Uri "http://localhost:8000/mcp" -Method Post -Headers $headers -Body $list
-```
-
-### Option 2: Using uv run
-
-```bash
-# Run with uv directly
-uv run vertica-mcp --transport sse --port 8000
-```
-
-## 🔍 Testing with MCP Inspector
-
-MCP Inspector is a visual debugging tool for MCP servers. It's invaluable for testing your server implementation.
-
-### Installation and Usage
-
-
-```bash
-# Run mcp with MCP Inspector (it will ask you to install it if you want to proceed)
-mcp dev vertica_mcp/server.py
-
-
-#OR install MCP Inspector globally
-npm install -g @modelcontextprotocol/inspector
-
-# Run inspector from your project directory
-cd vertica-mcp
-npx @modelcontextprotocol/inspector vertica_mcp/server.py
-
-# The inspector UI will open at http://localhost:6274
-```
-
-### Using the Inspector
-
-1. **Test Tools**: Click on "Tools" tab to see all available tools
-2. **Execute Queries**: Test `run_query_safely` with sample queries
-3. **View Responses**: See formatted JSON responses and errors
-4. **Test Prompts**: Try the built-in AI prompts
-5. **Monitor Performance**: Use `profile_query` to analyze query performance
-
-## 🤖 Claude Desktop Integration
-
-### Configuration
-
-1. **Open Claude Desktop Settings**
-   - On macOS: Claude menu → Settings
-   - On Windows: File → Settings
-
-2. **Edit Configuration**
-   - Click "Edit Config" in Developer tab
-   - This opens `claude_desktop_config.json`
-
-3. **Add Server Configuration**
-
-#### For STDIO Transport:
+**For local STDIO:**
 
 ```json
 {
   "mcpServers": {
-    "vertica-mcp": {
+    "vertica-mcp-stdio": {
       "command": "uv",
       "args": [
         "run",
-        "--with", "mcp[cli]",
-        "--with", "vertica-python",
-        "--with", "python-dotenv",
-        "--with", "pydantic",
-        "--with", "starlette",
-        "--with", "uvicorn",
-        "mcp",
-        "run",
-        "/path/to/vertica-mcp/vertica_mcp/server.py"
+        "vertica-mcp"
       ],
+      "cwd": "/path/to/vertica-mcp",
       "env": {
-        "PYTHONPATH": "/path/to/vertica-mcp",
-        "VERTICA_HOST": "localhost",
+        "VERTICA_HOST": "your_host",
         "VERTICA_PORT": "5433",
         "VERTICA_DATABASE": "your_database",
         "VERTICA_USER": "your_username",
-        "VERTICA_PASSWORD": "your_password",
-        "VERTICA_CONNECTION_LIMIT": "10"
+        "VERTICA_PASSWORD": "your_password"
       }
     }
   }
 }
 ```
 
-#### For SSE Transport:
+**Option A — Docker Compose (recommended)**
+
+```json
+{
+  "mcpServers": {
+    "vertica-mcp-stdio": {
+      "command": "docker",
+      "args": ["compose", 
+                "-f", 
+                "/path/to/vertica-mcp/docker-compose.yml", 
+                "run", 
+                "--rm", 
+                "-T", 
+                "mcp-stdio"]
+    }
+  }
+}
+```
+
+**Option B — Direct docker run (alternative)**
+
+```json
+{
+  "mcpServers": {
+    "vertica-mcp-stdio": {
+      "command": "docker",
+      "args": ["run", 
+               "-i", 
+               "--rm", 
+               "--env-file", 
+               "/path/to/vertica-mcp/.env", 
+               "vertica-mcp:latest"]
+    }
+  }
+}
+```
+
+**For Remote HTTP Server (works for docker):**
+
+```json
+{
+  "mcpServers": {
+    "vertica-mcp-http": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "http://localhost:8000/mcp"]
+    }
+  }
+}
+```
+
+**For Remote SSE Server (works for docker):**
 
 ```json
 {
@@ -330,125 +318,62 @@ npx @modelcontextprotocol/inspector vertica_mcp/server.py
 }
 ```
 
-#### For HTTP transport:
+3. **Restart Claude Desktop** and look for the 🔌 indicator
+
+</details>
+
+<details>
+<summary><b>VS Code</b></summary>
+
+1. **Install GitHub Copilot Chat Extension**
+2. **Create `.vscode/mcp.json`** in your workspace:
 
 ```json
 {
-  "mcpServers": {
-    "vertica-mcp-http": {
-      "command": "npx",
-      "args": ["-y", "mcp-remote", "http://localhost:8000/mcp"],
+  "servers": {
+    "vertica-mcp": {
+      "type": "http",
+      "url": "http://localhost:8000/mcp"
     }
   }
 }
 ```
 
-> Tip: When exposing the server beyond localhost, use `--bind-host 0.0.0.0` and consider enabling authentication in production.
-
----
-
-#### 🛠️ CLI Options Reference (HTTP additions)
-
-> Append these rows to your **CLI Options Reference** table.
-
-| Option | Description | Default |
-|---|---|---|
-| `--http-path PATH` | Endpoint path for Streamable HTTP | `/mcp` |
-| `--[no-]http-json` | Prefer batch JSON responses instead of streaming | `false` |
-| `--http-stateless / --http-stateful` | Use stateless sessions (recommended for remote) | `true` |
-
-
-4. **Restart Claude Desktop**
-   - Quit and restart Claude Desktop (if it didn't work end the task from Task Manager)
-   - Look for the MCP indicator (🔌) or (+) in the chat input area
-   - Click it to see available tools
-
-##### Note: if you are facing this error `[vertica-mcp] [error] spawn uv` you need to spesify the comple path to uv 
-On Mac/Linux : which uv  # shows the path
-On Windows: Get-Command uv  # shows the path
-
-### Usage Examples
-
-Once connected, you can ask Claude:
-
-```text
-"Show me all tables in the public schema"
-"Analyze the performance of this query: SELECT * FROM sales.orders WHERE order_date > '2024-01-01'"
-"What's the current database status and usage?"
-"Profile this query and suggest optimizations"
-"Monitor system performance for the last 15 minutes"
+3. **Enable MCP in Settings**:
+```json
+{
+  "chat.mcp.enabled": true,
+  "chat.mcp.discovery.enabled": true
+}
 ```
 
-## 🧭 Cursor Integration (MCP)
-Set up Cursor so it can connect to your Vertica MCP server by creating a **`mcp.json`** file and adding one of the configurations below (reuse the same server details already documented in this README).
+</details>
 
-### Where to put `mcp.json`
-- **Global (per user)**
-  - macOS/Linux: `~/.cursor/mcp.json`
-  - Windows: `%UserProfile%\.cursor\mcp.json`
-- **Per project**
-  - `<your-project>/.cursor/mcp.json`
+<details>
+<summary><b>Cursor</b></summary>
 
-> ⚠️ `mcp.json` must be **strict JSON** (no trailing commas or comments).
-
----
-
-### Option A — Remote via **Streamable HTTP** (recommended)
-Points Cursor to your single `/mcp` endpoint (as described in the HTTP Transport section).
+1. **Create `mcp.json`** in your Cursor config directory:
+   - **Global**: `~/.cursor/mcp.json` (macOS/Linux) or `%UserProfile%\.cursor\mcp.json` (Windows)
+   - **Per project**: `<project>/.cursor/mcp.json`
 
 ```json
 {
   "mcpServers": {
-    "vertica-mcp-http": {
+    "vertica-mcp": {
       "command": "npx",
       "args": ["-y", "mcp-remote", "http://localhost:8000/mcp"]
     }
   }
 }
 ```
----
 
-### Option B — Local via **stdio** (Cursor launches your server)
-Cursor runs your command and communicates over stdin/stdout. The environment values mirror the ones already used in this README.
+2. **Restart Cursor** and check Available Tools
 
-```json
-{
-  "mcpServers": {
-    "vertica-mcp": {
-      "command": "uv",
-      "args": [
-        "run",
-        "--with", "mcp[cli]",
-        "--with", "vertica-python",
-        "--with", "python-dotenv",
-        "--with", "pydantic",
-        "--with", "starlette",
-        "--with", "uvicorn",
-        "mcp",
-        "run",
-        "/path/to/vertica-mcp/vertica_mcp/server.py"
-      ],
-      "env": {
-        "PYTHONPATH": "/path/to/vertica-mcp",
-        "VERTICA_HOST": "localhost",
-        "VERTICA_PORT": "5433",
-        "VERTICA_DATABASE": "your_database",
-        "VERTICA_USER": "your_username",
-        "VERTICA_PASSWORD": "your_password",
-        "VERTICA_CONNECTION_LIMIT": "10"
-      }
-    }
-  }
-}
-```
+</details>
 
 ---
 
-### Finish up
-- **Restart Cursor** to reload the MCP configuration.
-- In a chat, check **Available Tools** to confirm the server is detected.
-- If anything fails, open **Output → MCP Logs** in Cursor for details.
-## 🛠️ CLI Options Reference
+## 🔧 CLI Reference
 
 ```bash
 vertica-mcp [OPTIONS]
@@ -456,215 +381,387 @@ vertica-mcp [OPTIONS]
 
 | Option | Description | Default |
 |--------|-------------|---------|
-| `-v, --verbose` | Increase verbosity (use multiple times: -v, -vv, -vvv) | ERROR |
+| `-v, --verbose` | Increase verbosity (-v, -vv, -vvv) | ERROR |
 | `--env-file PATH` | Path to .env file | `.env` |
 | `--transport TYPE` | Transport protocol (stdio, sse, http) | `stdio` |
 | `--port INT` | Port for SSE/HTTP transport | `8000` |
-| `--host HOST` | Vertica database host | `localhost` |
+| `--host HOST` | Vertica database host | from env |
 | `--bind-host HOST` | Host to bind SSE/HTTP server | `localhost` |
-| `--db-port INT` | Vertica database port | `5433` |
+| `--db-port INT` | Vertica database port | from env |
 | `--database NAME` | Database name | from env |
 | `--user USERNAME` | Database username | from env |
 | `--password PASS` | Database password | from env |
 | `--connection-limit INT` | Max connections in pool | `10` |
 | `--ssl` | Enable SSL for database | `false` |
 | `--ssl-reject-unauthorized` | Reject unauthorized SSL certs | `true` |
+| `--http-path PATH` | Endpoint path for HTTP | `/mcp` |
+| `--http-json` | Prefer batch JSON responses | `false` |
+| `--http-stateless` | Use stateless HTTP sessions | `true` |
 
-## 🔧 Advanced Configuration
+---
 
-### Connection Pool Tuning
+## 🎮 Usage Examples
 
-```bash
-# Optimize for high concurrency
-VERTICA_CONNECTION_LIMIT=50
-VERTICA_LAZY_INIT=1  # Don't create connections until needed
+### Natural Language Queries
 
-# Optimize for low latency
-VERTICA_CONNECTION_LIMIT=20
-VERTICA_LAZY_INIT=0  # Pre-create all connections
+<table>
+<tr>
+<td>
+
+**Basic Operations**
+```text
+"Show me all tables in the public schema"
+"What's the structure of the customers table?"
+"Get the last 100 orders from today"
+"List all projections for the orders table"
+"Get database status and health metrics"
 ```
 
-### Security Configuration
+</td>
+<td>
 
-#### Global Permissions
-```bash
-# Read-only mode
-ALLOW_INSERT_OPERATION=false
-ALLOW_UPDATE_OPERATION=false
-ALLOW_DELETE_OPERATION=false
-ALLOW_DDL_OPERATION=false
+**Performance Analysis**
+```text
+"Profile this query and suggest optimizations"
+"Show system performance for the last hour"
+"Find tables with high ROS container counts"
+"Analyze the performance of this query: SELECT * FROM sales.orders WHERE order_date > '2024-01-01'"
+"Monitor system performance for the last 30 minutes"
 ```
 
-#### Schema-Specific Permissions
-```bash
-# Format: schema1:permission,schema2:permission
-SCHEMA_INSERT_PERMISSIONS=staging:true,production:false
-SCHEMA_UPDATE_PERMISSIONS=staging:true,production:false
-SCHEMA_DELETE_PERMISSIONS=staging:true,production:false
-SCHEMA_DDL_PERMISSIONS=staging:false,production:false
+</td>
+</tr>
+<tr>
+<td>
+
+**Complex Analytics**
+```text
+"Analyze sales trends by region and product"
+"Find anomalies in transaction patterns"
+"Generate a monthly revenue report"
+"Execute this query safely: SELECT COUNT(*) FROM large_table"
 ```
 
-### SSL/TLS Configuration
+</td>
+<td>
 
-```bash
-# Enable SSL with certificate verification
-VERTICA_SSL=true
-VERTICA_SSL_REJECT_UNAUTHORIZED=true
-
-# Enable SSL without certificate verification (development only)
-VERTICA_SSL=true
-VERTICA_SSL_REJECT_UNAUTHORIZED=false
+**Database Management**
+```text
+"Check database health and storage usage"
+"Monitor resource pool utilization"
+"Identify and fix slow queries"
+"Show me the current resource pool utilization"
 ```
 
-## 📊 Using the Tools
+</td>
+</tr>
+</table>
 
-### Query Execution with Safety
+---
 
-The `run_query_safely` tool prevents accidental large result sets:
+### Transport Options
 
+| Transport | Use Case | Configuration |
+|-----------|----------|---------------|
+| **STDIO** | Local Claude Desktop | Default, no network required |
+| **HTTP** | Remote/Cloud deployments | RESTful API on custom port |
+| **SSE** | Real-time streaming | Server-sent events for live data |
+
+---
+
+## 🧪 Testing & Validation
+
+### Quick Health Check
+
+```bash
+# Test database connection
+python -c "
+import os
+from dotenv import load_dotenv
+load_dotenv()
+from vertica_mcp.connection import VerticaConfig, VerticaConnectionManager
+
+config = VerticaConfig.from_env()
+manager = VerticaConnectionManager()
+manager.initialize_default(config)
+conn = manager.get_connection()
+cursor = conn.cursor()
+cursor.execute('SELECT version()')
+print('✅ Connected to:', cursor.fetchone()[0])
+manager.release_connection(conn)
+"
+```
+
+### MCP Inspector
+
+```bash
+# Install MCP Inspector
+npm install -g @modelcontextprotocol/inspector
+
+# Test local server
+npx @modelcontextprotocol/inspector vertica_mcp/server.py
+
+# Test HTTP server
+npx @modelcontextprotocol/inspector http://localhost:8000/mcp
+```
+
+Use the MCP Inspector and set Transport Type to match your server, then configure:
+
+- **STDIO**
+  * Command: uv
+  * Arguments: `run --with mcp --with starlette --with uvicorn --with pydantic --with vertica-python mcp run vertica_mcp/server.py`
+
+- **SSE**
+  * URL: `http://localhost:8000/sse`
+
+- **HTTP**
+  * URL: `http://localhost:8000/mcp`
+
+### Validate API Endpoints
+
+```bash
+# Test tools list
+curl -s http://localhost:8000/mcp \
+  -H 'Content-Type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+
+# Test initialization
+curl -s http://localhost:8000/mcp \
+  -H 'Content-Type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"0.1.0","capabilities":{},"clientInfo":{"name":"test","version":"1.0.0"}}}'
+```
+
+---
+
+## 🚀 Advanced Features
+
+### Performance Optimization
+
+<details>
+<summary><b>Query Profiling & Optimization</b></summary>
+
+The server automatically profiles queries and provides:
+- Execution plan analysis
+- Join strategy recommendations
+- Projection optimization suggestions
+- ROS container health monitoring
+
+Example:
 ```python
-# Automatically detects large results
-await run_query_safely(
-    query="SELECT * FROM large_table",
-    row_threshold=1000,  # Warn if >1000 rows
-    proceed=False  # Don't proceed without confirmation
-)
+# Automatic query optimization
+"Profile and optimize: SELECT * FROM large_table JOIN dimension_table"
+# Returns: Execution plan, bottlenecks, and CREATE PROJECTION statements
 ```
 
-### Performance Profiling
+</details>
 
-```python
-# Get detailed execution plan
-await profile_query(
-    query="SELECT * FROM sales.orders JOIN sales.customers ON ..."
-)
+### Enterprise Integration
+
+<details>
+<summary><b>Production Deployment Checklist</b></summary>
+
+- [ ] Configure SSL/TLS for database connections
+- [ ] Set appropriate connection pool limits
+- [ ] Enable read-only mode for production
+- [ ] Configure schema-specific permissions
+- [ ] Set up monitoring and alerting
+- [ ] Implement rate limiting
+- [ ] Configure log rotation
+- [ ] Set up backup MCP servers for HA
+
+</details>
+
+---
+
+## 🛡️ Security Configuration
+
+### Permission Levels
+
+1. **Global Permissions**: Control operations across all schemas
+2. **Schema-specific Permissions**: Fine-grained control per schema
+3. **Connection Security**: SSL/TLS encryption options
+
+### Best Practices
+
+- **Use read-only credentials** for production deployments
+- **Enable SSL** for database connections
+- **Restrict network access** using firewall rules
+- **Monitor logs** for suspicious activity
+- **Use environment files** instead of hardcoded credentials
+
+---
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+#### Connection Problems
+```bash
+# Test database connectivity
+telnet your_vertica_host 5433
+
+# Check Vertica service
+vsql -h your_host -U your_user -d your_database
 ```
 
-### System Monitoring
+#### MCP Client Issues
+1. **Completely restart** the client application
+2. **Verify JSON syntax** in configuration files
+3. **Check server logs** with `-vvv` flag
+4. **Test with MCP Inspector** first
 
-```python
-# Monitor system performance
-await get_system_performance(
-    window_minutes=15,
-    bucket="minute",
-    top_n=5
-)
+#### Docker Issues
+```bash
+# Check container logs
+docker logs vertica-mcp
+
+# Test container connectivity
+docker exec -it vertica-mcp curl http://localhost:8000/mcp
 ```
 
-## 🧪 Development
+### Debug Mode
 
-### Project Structure
+```bash
+# Maximum verbosity
+vertica-mcp --transport http -vvv
+
+# Log to file
+vertica-mcp --transport http -vv 2> debug.log
+```
+
+---
+
+## 📁 Project Structure
 
 ```
 vertica-mcp/
-├── vertica_mcp/
-│   ├── __init__.py       # Package initialization
-│   ├── cli.py            # CLI interface
-│   ├── server.py         # MCP server implementation
-│   ├── connection.py     # Database connection management
-│   └── utils.py          # Utility functions
-├── .env                  # Environment configuration
-├── pyproject.toml        # Project configuration
-├── setup.py             # Setup configuration
-└── README.md            # This file
+├── vertica_mcp/              # Main package
+│   ├── __init__.py          # Package initialization
+│   ├── cli.py               # Command-line interface
+│   ├── server.py            # MCP server implementation
+│   ├── connection.py        # Database connection management
+│   └── utils.py            # Utility functions
+├── docker-compose.yml       # Docker Compose configuration
+├── docker-entrypoint.sh    # Docker entry point script
+├── Dockerfile              # Docker image definition
+├── pyproject.toml          # Project configuration
+├── setup.py               # Setup script
+├── .env.example           # Environment template
+└── README.md             # This file
 ```
 
-### Running Tests
+---
+
+## 🤝 Contributing
+
+We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+
+### Development Setup
 
 ```bash
+# Clone and setup development environment
+git clone https://github.com/zaboura/vertica-mcp.git
+cd vertica-mcp
+uv sync
+
 # Install development dependencies
 uv pip install -e ".[dev]"
 
 # Run tests
 pytest tests/
 
-# Run with coverage
-pytest --cov=vertica_mcp tests/
-```
-
-### Code Quality
-
-```bash
-# Format code
+# Code formatting
 black vertica_mcp/
 isort vertica_mcp/
 
-# Lint code
-pylint vertica_mcp/
+# Type checking
 mypy vertica_mcp/
 ```
 
-## 🐛 Troubleshooting
+### Adding New Tools
 
-### Common Issues
+1. **Add tool function** in `server.py` with `@mcp.tool()` decorator
+2. **Implement permission checks** using the connection manager
+3. **Add comprehensive error handling** and logging
+4. **Write tests** for the new functionality
+5. **Update documentation**
 
-#### Connection Refused
-```bash
-# Check Vertica is running
-vsql -h localhost -U dbadmin -d your_database
-
-# Test network connectivity
-telnet localhost 5433
-```
-
-#### MCP Server Not Showing in Claude
-1. Verify configuration in `claude_desktop_config.json`
-2. Check server logs: `vertica-mcp -vv`
-3. Restart Claude Desktop completely
-4. Test with MCP Inspector first
-
-#### Large Query Results
-- Use `run_query_safely` with appropriate `row_threshold`
-- Implement pagination with `query_page`
-- Consider using `stream_query` for very large datasets
-
-### Debug Mode
-
-Enable detailed logging:
-
-```bash
-# Maximum verbosity
-vertica-mcp -vvv
-
-# Write logs to file
-vertica-mcp -vv 2> debug.log
-```
-
-## 📚 Documentation
-
-- [MCP Specification](https://spec.modelcontextprotocol.io/)
-- [Vertica Python Client](https://github.com/vertica/vertica-python)
-- [FastMCP Documentation](https://github.com/modelcontextprotocol/fastmcp)
-- [Claude Desktop Guide](https://modelcontextprotocol.io/quickstart/user)
-
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
+### Contributing Guidelines
 
 1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+2. Create a feature branch (`git checkout -b feature/AmazingFeature`)
 3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
 4. Push to the branch (`git push origin feature/AmazingFeature`)
 5. Open a Pull Request
+
+---
+
+## 💬 Community & Support
+
+- **[GitHub Issues](https://github.com/zaboura/vertica-mcp/issues)** - Bug reports and feature requests
+- **[Discussions](https://github.com/zaboura/vertica-mcp/discussions)** - Questions and community support
+- **[Discord](https://discord.gg/vertica-mcp)** - Real-time chat with the community
+- **[Stack Overflow](https://stackoverflow.com/questions/tagged/vertica-mcp)** - Technical Q&A
+
+---
+
+## 📚 Resources
+
+### Official Documentation
+- **[MCP Specification](https://spec.modelcontextprotocol.io/)** - Protocol standard
+- **[Vertica Documentation](https://www.vertica.com/docs/)** - Database reference
+- **[FastMCP Framework](https://github.com/modelcontextprotocol/fastmcp)** - Server framework
+- **[Claude Desktop Guide](https://modelcontextprotocol.io/quickstart/user)** - Client setup instructions
+
+<!-- ### Tutorials & Guides
+- [Building Your First MCP Server](docs/tutorials/getting-started.md)
+- [Advanced Query Optimization](docs/guides/optimization.md)
+- [Security Best Practices](docs/guides/security.md)
+- [Troubleshooting Guide](docs/troubleshooting.md) -->
+
+---
+
+## 🔄 Changelog
+
+### v0.1.0 (2025-01-15)
+- 🎉 Initial release with core functionality
+- ✅ 11 database tools implemented
+- 🧠 5 AI-optimized prompts
+- 🚀 Support for STDIO, HTTP, and SSE transports
+- 🐳 Docker support with compose configurations
+- 🔐 Enterprise security features
+
+[See full changelog](CHANGELOG.md)
+
+---
 
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
+---
+
 ## 🙏 Acknowledgments
 
-- [Anthropic](https://www.anthropic.com/) for developing the Model Context Protocol
-- [Vertica](https://www.vertica.com/) for the powerful analytics database
-- The MCP community for continuous improvements and support
+- **[Anthropic](https://www.anthropic.com/)** for creating the Model Context Protocol
+- **[Vertica](https://www.vertica.com/)** for the powerful analytics platform
+- **[FastMCP](https://github.com/modelcontextprotocol/fastmcp)** for the excellent framework
+- **The MCP Community** for continuous support and contributions
 
-## 📞 Support
+---
 
-- **Issues**: [GitHub Issues](https://github.com/zaboura/vertica-mcp/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/zaboura/vertica-mcp/discussions)
-- **Email**: support@your-domain.com
+<div align="center">
+
+**Built with ❤️ for the AI and Database community**
+
+[![Star History](https://api.star-history.com/svg?repos=zaboura/vertica-mcp&type=Date)](https://star-history.com/#zaboura/vertica-mcp&Date)
+
+[⬆ Back to top](#vertica-mcp-server)
+
+</div>
 
 ---
 
 <p align="center">
-Built with ❤️ for the AI and Database community
+<strong>Built with ❤️ for the AI and Database community</strong>
 </p>
