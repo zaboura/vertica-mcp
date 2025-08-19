@@ -12,12 +12,13 @@ dependencies = [
     "setuptools>=61.0",
     "starlette>=0.46",
     "uvicorn>=0.34",
-    "black>=25.1.0",
-    "pylint>=3.3.8",
     "fastmcp>=2.11.3",
 ]
 [project.scripts]
 vertica-mcp = "vertica_mcp.cli:cli"
+
+[tool.setuptools.packages.find]
+include = ["vertica_mcp*"]
 
 [build-system]
 requires = ["setuptools>=61.0", "wheel"]
