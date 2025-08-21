@@ -6,7 +6,7 @@
 
 **Transform your Vertica Analytics Database into an AI-powered intelligence layer**
 
-[![MCP Version](https://img.shields.io/badge/MCP-2025--06--18-blue.svg)](https://spec.modelcontextprotocol.io/)
+[![MCP Version](https://img.shields.io/badge/MCP-2025--08--20-blue.svg)](https://spec.modelcontextprotocol.io/)
 [![Python Version](https://img.shields.io/badge/Python-3.11+-green.svg)](https://www.python.org/)
 [![Vertica Version](https://img.shields.io/badge/Vertica-24.x+-orange.svg)](https://www.vertica.com/)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -723,7 +723,7 @@ mypy vertica_mcp/
 
 ## 🔄 Changelog
 
-### v0.1.0 (2025-01-15)
+### v0.1.0 (2025-08-20)
 - 🎉 Initial release with core functionality
 - ✅ 11 database tools implemented
 - 🧠 5 AI-optimized prompts
@@ -748,7 +748,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **[FastMCP](https://github.com/modelcontextprotocol/fastmcp)** for the excellent framework
 - **The MCP Community** for continuous support and contributions
 
----
+<!-- ---
 
 <div align="center">
 
@@ -758,7 +758,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 [⬆ Back to top](#vertica-mcp-server)
 
-</div>
+</div> -->
 
 ---
 
