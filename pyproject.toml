@@ -1,9 +1,37 @@
 [project]
 name = "vertica-mcp"
 version = "0.1.0"
-description = "Add your description here"
+description = "Production-ready MCP server for Vertica—secure tools, row streaming, pagination, and system metrics for LLM agents (Claude, Cursor, VS Code)."
 readme = "README.md"
 requires-python = ">=3.11"
+license = { file = "LICENSE" }
+authors = [
+    { name = "Abdelhak Zabour", email = "abdelhakzabour@gmail.com" }
+]
+maintainers = [
+    { name = "Abdelhak Zabour" }
+]
+keywords = [
+    "vertica", "database", "mcp", "model-context-protocol",
+    "llm", "agent", "ai", "data", "analytics", "cli",
+    "claude", "cursor", "anthropic", "data-science"
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Database",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Application Frameworks",
+    "Operating System :: OS Independent",
+    "Environment :: Console",
+    "Framework :: FastAPI",
+]
+
 dependencies = [
     "click>=8.2.1",
     "mcp[cli]>=1.8.0",
@@ -15,11 +43,44 @@ dependencies = [
     "fastmcp>=2.11.3",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.1.0",
+    "black>=23.0.0",
+    "isort>=5.12.0",
+    "mypy>=1.5.0",
+    "ruff>=0.1.0",
+]
+test = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.1.0",
+    "pytest-mock>=3.11.0",
+]
+docs = [
+    "mkdocs>=1.5.0",
+    "mkdocs-material>=9.0.0",
+    "mkdocstrings[python]>=0.22.0",
+]
+
 [project.scripts]
 vertica-mcp = "vertica_mcp.cli:cli"
 
+[project.urls]
+Homepage = "https://github.com/zaboura/vertica-mcp"
+Repository = "https://github.com/zaboura/vertica-mcp"
+Documentation = "https://github.com/zaboura/vertica-mcp#readme"
+Issues = "https://github.com/zaboura/vertica-mcp/issues"
+Changelog = "https://github.com/zaboura/vertica-mcp/blob/master/CHANGELOG.md"
+
 [tool.setuptools.packages.find]
 include = ["vertica_mcp*"]
+exclude = ["tests*", "docs*"]
+
+[tool.setuptools.package-data]
+vertica_mcp = ["py.typed"]  # If you add type hints
 
 [build-system]
 requires = ["setuptools>=61.0", "wheel"]
@@ -27,3 +88,36 @@ build-backend = "setuptools.build_meta"
 
 [tool.uv]
 package = true
+
+# Development tools configuration
+[tool.black]
+line-length = 88
+target-version = ['py311']
+include = '\.pyi?$'
+
+[tool.isort]
+profile = "black"
+line_length = 88
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+ignore_missing_imports = true
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+select = ["E", "F", "I", "N", "W", "UP"]
+ignore = ["E501"]  # Line too long
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+asyncio_mode = "auto"
+addopts = "-ra -q --strict-markers --cov=vertica_mcp"
+
+[tool.coverage.run]
+source = ["vertica_mcp"]
+omit = ["*/tests/*", "*/test_*.py"]
