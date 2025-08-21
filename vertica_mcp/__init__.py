@@ -1,6 +1,6 @@
 """Vertica MCP"""
 
-from .cli import main, cli
+from .cli import cli, main
 
 __version__ = "0.1.0"
 

@@ -1,12 +1,13 @@
 """Vertica connection management module."""
 
-import os
 import logging
-from queue import Queue
+import os
 import threading
-from typing import Dict, Any, Optional
 from dataclasses import dataclass
 from enum import Enum, auto
+from queue import Queue
+from typing import Any, Dict, Optional
+
 import vertica_python
 
 # Constants for environment variables

@@ -8,20 +8,16 @@ and configuring database connection parameters.
 import asyncio
 import logging
 import os
+
 import click
 from dotenv import load_dotenv
-from .server import mcp, run_sse, run_http
+
+from .connection import (VERTICA_CONNECTION_LIMIT, VERTICA_DATABASE,
+                         VERTICA_HOST, VERTICA_PASSWORD, VERTICA_PORT,
+                         VERTICA_SSL, VERTICA_SSL_REJECT_UNAUTHORIZED,
+                         VERTICA_USER)
+from .server import mcp, run_http, run_sse
 from .utils import setup_logger
-from .connection import (
-    VERTICA_HOST,
-    VERTICA_PORT,
-    VERTICA_DATABASE,
-    VERTICA_USER,
-    VERTICA_PASSWORD,
-    VERTICA_CONNECTION_LIMIT,
-    VERTICA_SSL,
-    VERTICA_SSL_REJECT_UNAUTHORIZED,
-)
 
 load_dotenv()
 
@@ -74,7 +70,7 @@ def main(
         os.environ[VERTICA_SSL_REJECT_UNAUTHORIZED] = str(
             ssl_reject_unauthorized
         ).lower()
-        
+
     if transport.lower() == "sse":
         logging.info(f"Launching SSE transport on {bind_host}:{port}")
         asyncio.run(run_sse(host=bind_host, port=port))
@@ -108,7 +104,9 @@ def main(
 )
 @click.option(
     "--transport",
-    type=click.Choice(["stdio", "sse", "http", "streamable-http"], case_sensitive=False),
+    type=click.Choice(
+        ["stdio", "sse", "http", "streamable-http"], case_sensitive=False
+    ),
     default="stdio",
     help="Transport type (stdio, sse, http/streamable-http).",
 )
@@ -181,4 +179,7 @@ def main(
     help="Use stateless Streamable HTTP sessions (recommended for remote clients).",
 )
 def cli(**kwargs):
+    """Command-line interface for MCP Vertica Server
+    This function sets up the command-line interface using Click and calls the main function.
+    """
     main(**kwargs)
