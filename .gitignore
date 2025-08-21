@@ -1,14 +1,21 @@
 # Python-generated files
 __pycache__/
+.env
+vertica_mcp/__pycache__/
 *.py[oc]
 build/
 dist/
 wheels/
 *.egg-info
-
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+.vscode/
+.idea/
+.cursor/
+.cursor/mcp.json
 # Virtual environments
 .venv
 
 #files
 claude_desktop_config.jsonc
-.env.env.example
