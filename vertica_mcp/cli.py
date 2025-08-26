@@ -29,7 +29,7 @@ from .connection import (VERTICA_CONNECTION_LIMIT, VERTICA_DATABASE,
                          VERTICA_HOST, VERTICA_PASSWORD, VERTICA_PORT,
                          VERTICA_SSL, VERTICA_SSL_REJECT_UNAUTHORIZED,
                          VERTICA_USER)
-from .server import mcp, run_http, run_sse
+from .server import run_http, run_sse, run_stdio
 from .utils import setup_logger
 
 load_dotenv()
@@ -102,10 +102,70 @@ def main(
             )
         )
     else:
-        mcp.run()  # stdio
+        asyncio.run(run_stdio())
+
+
+def create_env_file():
+    """Create .env configuration file."""
+    env_content = """# Vertica MCP Server Configuration
+# Database Connection
+VERTICA_HOST=localhost
+VERTICA_PORT=5433
+VERTICA_DATABASE=VMart
+VERTICA_USER=dbadmin
+VERTICA_PASSWORD=password
+
+# Connection Pool
+VERTICA_CONNECTION_LIMIT=10
+VERTICA_LAZY_INIT=1
+
+# SSL Configuration (optional)
+VERTICA_SSL=false
+VERTICA_SSL_REJECT_UNAUTHORIZED=true
+
+VERTICA_QUERY_TIMEOUT=600  # Query timeout in seconds
+VERTICA_MAX_RETRIES=3      # Max retry attempts
+VERTICA_RETRY_DELAY=0.1    # Base delay for retries
+VERTICA_CACHE_TTL=300      # Cache TTL in seconds
+VERTICA_MAX_RESULT_MB=100  # Max result size in MB
+VERTICA_RATE_LIMIT=60      # Requests per minute
+VERTICA_HEALTH_CHECK_INTERVAL=60  # Health check interval
+
+# Security Permissions (optional - defaults to read-only)
+ALLOW_INSERT_OPERATION=false
+ALLOW_UPDATE_OPERATION=false
+ALLOW_DELETE_OPERATION=false
+ALLOW_DDL_OPERATION=false
+
+# Schema-specific Permissions (optional)
+SCHEMA_INSERT_PERMISSIONS=staging:true,production:false
+SCHEMA_UPDATE_PERMISSIONS=staging:true,production:false
+SCHEMA_DELETE_PERMISSIONS=staging:false,production:false
+SCHEMA_DDL_PERMISSIONS=staging:false,production:false
+"""
+    
+    if os.path.exists('.env'):
+        click.echo("Configuration file '.env' already exists.")
+        if click.confirm("Do you want to overwrite it?"):
+            with open('.env', 'w') as f:
+                f.write(env_content)
+            click.echo("Configuration file '.env' has been overwritten.")
+        else:
+            click.echo("Configuration file creation cancelled.")
+        return
+        
+    with open('.env', 'w') as f:
+        f.write(env_content)
+    click.echo("Created '.env' configuration file.")
+    click.echo("Please edit it with your Vertica database credentials before running the server.")
 
 
 @click.command()
+@click.option(
+    "--init",
+    is_flag=True,
+    help="Initialize configuration file (.env) and exit"
+)
 @click.option(
     "-v",
     "--verbose",
@@ -113,7 +173,9 @@ def main(
     help="Increase verbosity (can be used multiple times, e.g., -v, -vv, -vvv)",
 )
 @click.option(
-    "--env-file", type=click.Path(exists=True, dir_okay=False), help="Path to .env file"
+    "--env-file", 
+    type=click.Path(exists=True, dir_okay=False), 
+    help="Path to .env file"
 )
 @click.option(
     "--transport",
@@ -130,11 +192,11 @@ def main(
 )
 @click.option(
     "--host",
-    default=None,  # ← Changed from "localhost" to None
+    default=None,
     help="Host to bind to for SSE/HTTP transport, or Vertica host for database",
 )
 @click.option(
-    "--bind-host",  # ← Add separate option for binding
+    "--bind-host",
     default="localhost",
     help="Host to bind SSE/HTTP server to (default: localhost)",
 )
@@ -191,8 +253,17 @@ def main(
     show_default=True,
     help="Use stateless Streamable HTTP sessions (recommended for remote clients).",
 )
-def cli(**kwargs):
-    """Command-line interface for MCP Vertica Server
-    This function sets up the command-line interface using Click and calls the main function.
+def cli(init, **kwargs):
+    """MCP Vertica Server - Vertica functionality for MCP
+    
+    Examples:
+        vertica-mcp --init                    # Create configuration file
+        vertica-mcp --transport stdio         # Start with STDIO transport  
+        vertica-mcp --transport http --port 8000  # Start HTTP server
+        vertica-mcp -vvv --transport stdio    # Start with debug logging
     """
+    if init:
+        create_env_file()
+        return
+    
     main(**kwargs)
