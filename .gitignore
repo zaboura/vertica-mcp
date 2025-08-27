@@ -298,3 +298,7 @@ temp/
 vertica_mcp/__pycache__/
 .ruff_cache/
 claude_desktop_config.jsonc
+
+
+# PyPi
+PyPi-instruction.txt

@@ -15,6 +15,7 @@
 
 import asyncio
 import logging
+import sys
 import os
 import re
 import socket
@@ -167,22 +168,41 @@ def extract_schema_from_query(query: str) -> str | None:
     return None
 
 
+def _print_banner(transport: str, endpoint: str | None, *, to_stderr: bool = False) -> None:
+    """Pretty banner without polluting STDOUT for stdio."""
+    out = sys.stderr if to_stderr else sys.stdout
+    width = 100
+
+    print(f"\n╔{'═' * width}╗", file=out, flush=True)
+    print(f"║{'Vertica MCP Server':^{width}}║", file=out, flush=True)
+    print(f"╠{'═' * width}╣", file=out, flush=True)
+
+    # Transport line
+    pad_t = width - len("  Transport : ")  # account for borders
+    print(f"║  Transport : {transport:<{pad_t}}║", file=out, flush=True)
+
+    # Endpoint line (optional, truncated if too long)
+    if endpoint:
+        max_ep_len = width - len("  Endpoint  : ") 
+        ep = endpoint if len(endpoint) <= max_ep_len else endpoint[: max_ep_len - 1] + "…"
+        print(f"║  Endpoint  : {ep:<{max_ep_len}}║", file=out, flush=True)
+
+    # Status line
+    pad_s = width - len("  Status    : Ready") 
+    print(f"║  Status    : Ready{' ' * pad_s}║", file=out, flush=True)
+    print(f"╚{'═' * width}╝\n", file=out, flush=True)
+
 async def run_sse(host: str = "localhost", port: int = 8000) -> None:
     """Launch the MCP server with HTTP-SSE transport."""
     logger.info(f"Starting MCP server with SSE transport on {host}:{port}")
 
     sse_app = mcp.sse_app()
 
-    print(f"\n╔{'═' * 50}╗")
-    print(f"║{'Vertica MCP Server':^50}║")
-    print(f"╠{'═' * 50}╣")
-    print(f"║  Transport : SSE{' ' * 33}║")
-    print(
-        f"║  Endpoint  : http://{host}:{port}{' ' * (28 - len(host) - len(str(port)))}║"
-    )
-    print(f"║  Status    : Ready{' ' * 31}║")
-    print(f"╚{'═' * 50}╝\n")
-    print(f"📝 Connect MCP clients to: http://{host}:{port}/sse")
+    # Banner to STDOUT is fine for network transports
+    _print_banner("SSE", f"http://{host}:{port}")
+
+    # Friendly hint
+    print(f"📝 Connect MCP clients to: http://{host}:{port}/sse", flush=True)
 
     config = uvicorn.Config(
         sse_app,
@@ -191,10 +211,9 @@ async def run_sse(host: str = "localhost", port: int = 8000) -> None:
         log_level="info",
         access_log=True,
         use_colors=True,
-        timeout_keep_alive=30,  # Add keepalive timeout
-        limit_max_requests=1000,  # Restart workers after N requests
+        timeout_keep_alive=30,
+        limit_max_requests=1000,
     )
-
     server = uvicorn.Server(config)
 
     try:
@@ -204,7 +223,6 @@ async def run_sse(host: str = "localhost", port: int = 8000) -> None:
     except Exception as e:
         logger.error(f"Server error: {e}")
         raise
-
 
 async def run_http(
     host: str = "127.0.0.1",
@@ -222,20 +240,13 @@ async def run_http(
     mcp.settings.json_response = json_response
     mcp.settings.stateless_http = stateless_http
 
-    http_app = mcp.streamable_http_app()
+    # Banner to STDOUT is fine for network transports
+    _print_banner("Streamable HTTP", f"http://{host}:{port}{path}")
 
-    print(f"\n╔{'═' * 50}╗")
-    print(f"║{'Vertica MCP Server':^50}║")
-    print(f"╠{'═' * 50}╣")
-    print(f"║  Transport : Streamable HTTP{' ' * 21}║")
-    ep = f"http://{host}:{port}{path}"
-    pad = max(0, 36 - len(ep))
-    print(f"║  Endpoint  : {ep}{' ' * pad}║")
-    print(f"║  Status    : Ready{' ' * 31}║")
-    print(f"╚{'═' * 50}╝\n")
+    app = mcp.streamable_http_app()
 
     config = uvicorn.Config(
-        http_app,
+        app,
         host=host,
         port=port,
         log_level="info",
@@ -244,8 +255,8 @@ async def run_http(
         timeout_keep_alive=30,
         limit_max_requests=1000,
     )
-
     server = uvicorn.Server(config)
+
     try:
         await server.serve()
     except KeyboardInterrupt:
@@ -253,6 +264,20 @@ async def run_http(
     except Exception as e:
         logger.error(f"Server error: {e}")
         raise
+async def run_stdio() -> None:
+    """Launch the MCP server with STDIO transport (safe banner on STDERR)."""
+    logger.info("Starting MCP server with STDIO transport")
+
+    _print_banner("STDIO", None, to_stderr=True)
+    print("📝 Connect MCP clients via STDIO integration (no URL)", file=sys.stderr, flush=True)
+
+    # Prefer the async stdio runner if present
+    if hasattr(mcp, "run_stdio_async"):
+        await mcp.run_stdio_async()
+    else:
+        # Fallback: run the blocking mcp.run() (which calls anyio.run) in a worker thread
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, mcp.run)
 
 
 @asynccontextmanager
@@ -1723,12 +1748,12 @@ async def sql_query_safety_guard() -> str:
 @mcp.prompt()
 async def vertica_query_performance_analyzer() -> str:
     """
-    🚀 Vertica Performance Analyzer - Deep-dive query performance analysis with actionable optimization recommendations.
+    Vertica Performance Analyzer - Deep-dive query performance analysis with actionable optimization recommendations.
 
     Analyzes the given query execution plans, identifies bottlenecks, and provides concrete DDL suggestions
     for optimal Vertica projections, join strategies, and ROS container health.
     """
-    return """🔍 VERTICA PERFORMANCE ANALYSIS
+    return """VERTICA PERFORMANCE ANALYSIS
 
 ANALYSIS WORKFLOW:
 1) IMPORTANT: ALWAYS SUGGEST TO THE USER TO USE DATABASE DESIGNER (DBD) COMPREHENSIVE AND INCREMENTAL TO OPTIMIZE THE QUERY FIRST
@@ -1767,32 +1792,55 @@ RULES:
 @mcp.prompt()
 async def vertica_sql_assistant() -> str:
     """
-    💡 Vertica SQL Assistant - Expert SQL query generation with Vertica-specific optimizations.
+    Vertica SQL Assistant - Expert SQL query generation with Vertica-specific optimizations.
 
-    Generates efficient, Vertica-optimized SQL queries for any data task with proper
-    function usage, performance considerations, and best practices.
+    Generates efficient, Vertica-optimized SQL queries following a structured approach:
+    analyze → research → generate → execute → fix → deliver
     """
-    return """📝 VERTICA SQL QUERY GENERATION
+    return """VERTICA SQL QUERY GENERATION
 
-As a Vertica SQL expert, I'll write an optimized query for the given task.
+As a Vertica SQL expert, I follow a structured approach to deliver optimized queries.
+
+PROCESS WORKFLOW:
+1. **ANALYZE** - Understand the user's request and data requirements
+2. **RESEARCH** - Check Vertica documentation for native functions before writing custom logic
+3. **GENERATE** - Create optimized SQL using Vertica-specific features
+4. **EXECUTE** - Run the query to validate functionality
+5. **FIX** - Debug and resolve any errors that occur
+6. **DELIVER** - Provide the final, tested query with explanations
+
+RESEARCH FIRST RULE:
+- ALWAYS search Vertica documentation for native functions before implementing custom solutions
+- Use web_search to find official Vertica docs for specific operations (sessionization, window functions, analytics, etc.)
+- Leverage Vertica's specialized functions like CONDITIONAL_TRUE_EVENT, CONDITIONAL_CHANGE_EVENT, etc.
 
 VERTICA BEST PRACTICES:
-✅ **Functions**: Use Vertica-specific functions (REGEXP_REPLACE, REGEXP_LIKE, APPROXIMATE_COUNT_DISTINCT, etc.)
-✅ **Joins**: Prefer INNER joins when possible, use appropriate join types
-✅ **Filtering**: Apply WHERE clauses early to minimize data movement
-✅ **Aggregations**: Use efficient aggregation functions and GROUP BY strategies
-✅ **Projections**: Consider projection-friendly query patterns
-✅ **Formatting**: Clear, readable SQL with proper indentation
+- **Native Functions**: Prioritize Vertica-specific functions over custom implementations
+- **Performance**: Use efficient window functions, projections, and partitioning
+- **Joins**: Prefer INNER joins when possible, optimize join order
+- **Aggregations**: Leverage APPROXIMATE_COUNT_DISTINCT, analytical functions
+- **Formatting**: Clean, readable SQL with proper indentation and comments
 
-APPROACH:
-1. If schema exploration needed → use `get_schema_tables`, `get_database_schemas`, `get_table_structure`
-2. Write efficient, well-formatted SQL
-3. Include comments explaining Vertica-specific optimizations
-4. Suggest projection improvements if applicable
+IMPLEMENTATION APPROACH:
+1. **Schema Discovery**: Use `get_schema_tables`, `get_database_schemas`, `get_table_structure` if needed
+2. **Documentation Check**: Search for Vertica-specific functions before custom coding
+3. **Query Generation**: Write optimized SQL with Vertica best practices
+4. **Execution**: Always execute the query using `run_query_safely`
+5. **Error Handling**: If execution fails, analyze errors and fix immediately
+6. **Validation**: Ensure query produces expected results
 
-QUERY REQUIREMENTS:
-- Readable formatting with clear indentation
-- Proper use of Vertica functions and syntax
-- Performance-conscious design
-- Comments for complex logic
-RULE: CHECK THE DOCUMENTATION FOR THE FUNCTIONS FIRST BEFORE USING THEM"""
+QUERY STANDARDS:
+- Clear, commented SQL with logical structure
+- Proper use of CTEs for complex operations
+- Vertica-optimized functions and syntax
+- Performance-conscious design patterns
+- Error-free, tested implementation
+
+EXECUTION PROTOCOL:
+- Generate query based on requirements
+- Execute immediately to validate functionality  
+- Fix any errors encountered during execution
+- Provide final working query with performance notes
+- Suggest optimizations or projection improvements where applicable
+
+CRITICAL: Always execute queries to ensure they work correctly before presenting the final solution."""
