@@ -83,18 +83,20 @@ def main(
         os.environ[VERTICA_SSL_REJECT_UNAUTHORIZED] = str(
             ssl_reject_unauthorized
         ).lower()
+        
+    actual_bind_host = bind_host if transport in ["http", "sse"] else "localhost"
+    # Fixed transport logic
+    transport_lower = transport.lower() # ← Convert to lowercase
 
-    if transport.lower() == "sse":
-        logging.info(f"Launching SSE transport on {bind_host}:{port}")
-        asyncio.run(run_sse(host=bind_host, port=port))
-    elif transport.lower() in ("http", "streamable-http"):
-        logging.info(
-            f"Launching Streamable HTTP on {bind_host}:{port}{http_path} "
-            f"(json_response={http_json}, stateless={http_stateless})"
-        )
+    # Dispatch to transport method
+    if transport_lower == "stdio":
+        asyncio.run(run_stdio())
+    elif transport_lower == "sse":
+        asyncio.run(run_sse(host=actual_bind_host, port=port))
+    elif transport_lower in ("http", "streamable-http"):
         asyncio.run(
             run_http(
-                host=bind_host,
+                host=actual_bind_host,
                 port=port,
                 path=http_path,
                 json_response=http_json,
@@ -102,7 +104,7 @@ def main(
             )
         )
     else:
-        asyncio.run(run_stdio())
+        raise ValueError(f"Unknown transport: {transport}")
 
 
 def create_env_file():
