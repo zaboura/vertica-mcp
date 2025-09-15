@@ -30,6 +30,7 @@ from typing import Any, Dict, List, Optional
 import uvicorn
 from dotenv import find_dotenv, load_dotenv
 from mcp.server.fastmcp import Context, FastMCP
+from starlette.middleware.cors import CORSMiddleware
 
 from vertica_mcp.connection import (OperationType, VerticaConfig,
                                     VerticaConnectionManager)
@@ -191,79 +192,6 @@ def _print_banner(transport: str, endpoint: str | None, *, to_stderr: bool = Fal
     pad_s = width - len("  Status    : Ready") 
     print(f"║  Status    : Ready{' ' * pad_s}║", file=out, flush=True)
     print(f"╚{'═' * width}╝\n", file=out, flush=True)
-
-async def run_sse(host: str = "localhost", port: int = 8000) -> None:
-    """Launch the MCP server with HTTP-SSE transport."""
-    logger.info(f"Starting MCP server with SSE transport on {host}:{port}")
-
-    sse_app = mcp.sse_app()
-
-    # Banner to STDOUT is fine for network transports
-    _print_banner("SSE", f"http://{host}:{port}")
-
-    # Friendly hint
-    print(f"📝 Connect MCP clients to: http://{host}:{port}/sse", flush=True)
-
-    config = uvicorn.Config(
-        sse_app,
-        host=host,
-        port=port,
-        log_level="info",
-        access_log=True,
-        use_colors=True,
-        timeout_keep_alive=30,
-        limit_max_requests=1000,
-    )
-    server = uvicorn.Server(config)
-
-    try:
-        await server.serve()
-    except KeyboardInterrupt:
-        logger.info("Received interrupt signal, shutting down gracefully")
-    except Exception as e:
-        logger.error(f"Server error: {e}")
-        raise
-
-async def run_http(
-    host: str = "127.0.0.1",
-    port: int = 8000,
-    path: str = "/mcp",
-    json_response: bool = False,
-    stateless_http: bool = True,
-) -> None:
-    """Launch the MCP server with Streamable HTTP transport."""
-    logger.info(f"Starting MCP server with Streamable HTTP on {host}:{port}{path}")
-
-    mcp.settings.host = host
-    mcp.settings.port = port
-    mcp.settings.streamable_http_path = path
-    mcp.settings.json_response = json_response
-    mcp.settings.stateless_http = stateless_http
-
-    # Banner to STDOUT is fine for network transports
-    _print_banner("Streamable HTTP", f"http://{host}:{port}{path}")
-
-    app = mcp.streamable_http_app()
-
-    config = uvicorn.Config(
-        app,
-        host=host,
-        port=port,
-        log_level="info",
-        access_log=True,
-        use_colors=True,
-        timeout_keep_alive=30,
-        limit_max_requests=1000,
-    )
-    server = uvicorn.Server(config)
-
-    try:
-        await server.serve()
-    except KeyboardInterrupt:
-        logger.info("Received interrupt signal, shutting down gracefully")
-    except Exception as e:
-        logger.error(f"Server error: {e}")
-        raise
 async def run_stdio() -> None:
     """Launch the MCP server with STDIO transport (safe banner on STDERR)."""
     logger.info("Starting MCP server with STDIO transport")
@@ -415,6 +343,99 @@ mcp = FastMCP(
     stateless_http=True,
 )
 
+
+# Add CORS configuration for SSE app
+async def run_sse(host: str = "localhost", port: int = 8000) -> None:
+    """Launch the MCP server with HTTP-SSE transport."""
+    logger.info(f"Starting MCP server with SSE transport on {host}:{port}")
+
+    sse_app = mcp.sse_app()
+    
+    # Add CORS middleware
+    sse_app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    # Banner to STDOUT is fine for network transports
+    _print_banner("SSE", f"http://{host}:{port}")
+
+    # Friendly hint
+    print(f"🔌 Connect MCP clients to: http://{host}:{port}/sse", flush=True)
+
+    config = uvicorn.Config(
+        sse_app,
+        host=host,
+        port=port,
+        log_level="info",
+        access_log=True,
+        use_colors=True,
+        timeout_keep_alive=30,
+        limit_max_requests=1000,
+    )
+    server = uvicorn.Server(config)
+
+    try:
+        await server.serve()
+    except KeyboardInterrupt:
+        logger.info("Received interrupt signal, shutting down gracefully")
+    except Exception as e:
+        logger.error(f"Server error: {e}")
+        raise
+    
+async def run_http(
+    host: str = "127.0.0.1",
+    port: int = 8000,
+    path: str = "/mcp",
+    json_response: bool = True,
+    stateless_http: bool = True,
+) -> None:
+    """Launch the MCP server with Streamable HTTP transport."""
+    logger.info(f"Starting MCP server with Streamable HTTP on {host}:{port}{path}")
+
+    mcp.settings.host = host
+    mcp.settings.port = port
+    mcp.settings.streamable_http_path = path
+    mcp.settings.json_response = json_response
+    mcp.settings.stateless_http = stateless_http
+
+    # Banner to STDOUT is fine for network transports
+    _print_banner("Streamable HTTP", f"http://{host}:{port}{path}")
+
+    app = mcp.streamable_http_app()
+    
+    # Add CORS middleware
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    config = uvicorn.Config(
+        app,
+        host=host,
+        port=port,
+        log_level="info",
+        access_log=True,
+        use_colors=True,
+        timeout_keep_alive=30,
+        limit_max_requests=1000,
+    )
+    server = uvicorn.Server(config)
+
+    try:
+        await server.serve()
+    except KeyboardInterrupt:
+        logger.info("Received interrupt signal, shutting down gracefully")
+    except Exception as e:
+        logger.error(f"Server error: {e}")
+        raise
+    
 
 #--------------------------------------------
 #---------- Run Query Safely ------------------
