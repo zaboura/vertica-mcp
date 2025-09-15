@@ -443,14 +443,20 @@ For remote deployments or when you prefer HTTP-based communication:
     "vertica-mcp-http": {
       "command": "npx",
       "args": ["-y", "mcp-remote", "http://localhost:8000/mcp"]
-    },
-    "vertica-mcp-sse": {
+    }
+  }
+}
+```
+
+```json
+{
+  "mcpServers": {
+       "vertica-mcp-sse": {
       "command": "npx",
       "args": ["-y", "mcp-remote", "http://localhost:8000/sse"]
     }
   }
 }
-```
 
 6. **Final Step: Restart Claude Desktop** 
 
