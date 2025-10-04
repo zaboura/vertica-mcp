@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 # Copyright 2025 Abdelhak Zabour
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -11,7 +12,17 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+#
+# ---------------------------------------------------------------------
+# MIT-LICENSED PORTIONS (ATTRIBUTION)
+# Portions of this file are derived from mcp-vertica by nolleh
+# https://github.com/nolleh/mcp-vertica
+# Copyright (c) 2024-2025 nolleh
+# Licensed under the MIT License (see LICENSE for full text)
+# ---------------------------------------------------------------------
+
 """Server module for Vertica MCP. Provides API endpoints and database utilities."""
+
 
 import asyncio
 import logging

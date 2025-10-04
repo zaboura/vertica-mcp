@@ -199,3 +199,46 @@ Apache License
    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
    See the License for the specific language governing permissions and
    limitations under the License.
+
+
+---------------------------------------------------------------------
+THIRD-PARTY NOTICES – MIT LICENSED COMPONENTS
+---------------------------------------------------------------------
+
+Portions of this software are derived from mcp-vertica
+Copyright (c) 2024-2025 nolleh
+https://github.com/nolleh/mcp-vertica
+Licensed under the MIT License.
+
+The following components contain code adapted from that project:
+
+- `OperationType` enum (`connection.py`, lines ≈ 40-46)
+- `SchemaPermissions` dataclass (`connection.py`, lines ≈ 49-57)
+- `VerticaConfig` structure and `from_env()` logic (`connection.py`, lines ≈ 61-129)
+- `VerticaConnectionPool` implementation (`connection.py`, lines ≈ 132-241)
+- `is_operation_allowed()` method (`connection.py`, lines ≈ 270-300)
+- `extract_operation_type()` and `extract_schema_from_query()` functions (`server.py`, lines ≈ 148-169)
+
+These portions remain under the MIT License reproduced below:
+
+---------------------------------------------------------------------
+MIT LICENSE
+---------------------------------------------------------------------
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

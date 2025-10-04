@@ -1032,6 +1032,22 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENS
 
 ## Acknowledgments
 
+This project builds upon [mcp-vertica](https://github.com/nolleh/mcp-vertica)  
+by [@nolleh](https://github.com/nolleh).  
+
+While the original implementation provided a foundation for Vertica MCP support,  
+this fork introduces significant enhancements, including:
+
+- Caching layers and query result reuse  
+- Rate limiting and throttling control  
+- Improved error handling and retry logic  
+- More advanced parsing and schema extraction  
+- Connection pooling optimizations and performance tuning  
+- New tooling and prompt injections tailored to Vertica workflows  
+
+I’m grateful to the original author for the groundwork.  
+If you use or adapt my enhancements, please credit both the original and this extension.
+
 ### Project Recognition
 
 **Core Technologies:**
