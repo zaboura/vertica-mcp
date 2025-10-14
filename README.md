@@ -1045,9 +1045,6 @@ this fork introduces significant enhancements, including:
 - Connection pooling optimizations and performance tuning  
 - New tooling and prompt injections tailored to Vertica workflows  
 
-I’m grateful to the original author for the groundwork.  
-If you use or adapt my enhancements, please credit both the original and this extension.
-
 ### Project Recognition
 
 **Core Technologies:**
