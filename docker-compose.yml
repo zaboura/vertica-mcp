@@ -1,45 +1,36 @@
-name: vertica-mcp
-
 services:
-  # STDIO (default) — interactive, no ports
   mcp-stdio:
     build: .
     image: vertica-mcp:latest
     container_name: vertica-mcp-stdio
-    env_file:
-      - .env
     environment:
-      - TRANSPORT=stdio
+      - TRANSPORT=${TRANSPORT:-stdio}
+      - PORT=${PORT:-8000}
     stdin_open: true
     tty: false
+    entrypoint: ["/usr/local/bin/docker-entrypoint.sh"]
 
-  # SSE — binds to 0.0.0.0:8000 inside, published on host 8001
-  mcp-sse:
-    image: vertica-mcp:latest
-    container_name: vertica-mcp-sse
-    env_file:
-      - .env
-    environment:
-      - TRANSPORT=sse
-      - PORT=8000
-      - BIND=0.0.0.0
-    ports:
-      - "8001:8000"
-    restart: unless-stopped
-    init: true
-
-  # HTTP (Streamable HTTP) — /mcp on 8000
   mcp-http:
+    build: .
     image: vertica-mcp:latest
     container_name: vertica-mcp-http
-    env_file:
-      - .env
     environment:
-      - TRANSPORT=http
-      - PORT=8000
-      - BIND=0.0.0.0
-      - HTTP_PATH=/mcp
+      - TRANSPORT=${TRANSPORT:-http}
+      - BIND=${BIND:-0.0.0.0}
+      - PORT=${PORT:-8000}
+      - HTTP_PATH=${HTTP_PATH:-/mcp}
     ports:
-      - "8000:8000"
-    restart: unless-stopped
-    init: true
+      - "${HTTP_HOST_PORT:-8000}:${PORT:-8000}"
+    entrypoint: ["/usr/local/bin/docker-entrypoint.sh"]
+
+  mcp-sse:
+    build: .
+    image: vertica-mcp:latest
+    container_name: vertica-mcp-sse
+    environment:
+      - TRANSPORT=${TRANSPORT:-sse}
+      - BIND=${BIND:-0.0.0.0}
+      - PORT=${PORT:-8000}
+    ports:
+      - "${SSE_HOST_PORT:-8001}:${PORT:-8000}"
+    entrypoint: ["/usr/local/bin/docker-entrypoint.sh"]

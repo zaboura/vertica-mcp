@@ -12,9 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Vertica MCP"""
-
-from .cli import cli, main
-
-__version__ = "0.1.3"
-
-__all__ = ["main", "cli", "__version__"]
+__version__ = "0.1.0"
+# Keep imports light so dynamic version reads during build are safe.
+__all__ = ["__version__"]

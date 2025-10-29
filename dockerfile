@@ -8,25 +8,23 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
-# Copy metadata first for layer caching
-COPY pyproject.toml uv.lock* ./
-
-# Install runtime deps (not your source yet)
-RUN uv sync --frozen --no-dev
-
-# Copy source + README (needed for -e .)
+# Copy metadata + source (dynamic version needs the package present)
+COPY pyproject.toml uv.lock* README.md ./
 COPY vertica_mcp ./vertica_mcp
-COPY README.md ./
 
-# Install package (provides /usr/local/bin/vertica-mcp)
-RUN uv pip install -e .
+# Install runtime deps
+RUN --mount=type=cache,target=/root/.cache/uv uv sync --frozen --no-dev
 
-# Lightweight entrypoint to switch transport via $TRANSPORT (default=stdio)
+# Make venv default
+ENV PATH="/app/.venv/bin:${PATH}"
+
+# Install project (for CLI entrypoint)
+RUN uv pip install --no-cache-dir -e .
+
+# Entrypoint (normalize EOLs for Windows-originated files)
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+RUN sed -i 's/\r$//' /usr/local/bin/docker-entrypoint.sh \
+ && chmod +x /usr/local/bin/docker-entrypoint.sh
 
-# Expose only for SSE/HTTP modes (harmless for stdio)
 EXPOSE 8000
-
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
-# No CMD -> defaults to stdio via entrypoint
