@@ -197,6 +197,38 @@ docker compose up mcp-http
 # SSE transport (for real-time streaming)
 docker compose up mcp-sse
 ```
+#### Binding behavior
+
+- By default, .env sets BIND=127.0.0.1 (localhost) for safety.
+
+- The Compose file defines service-specific bind variables:
+
+```bash
+HTTP_BIND=${HTTP_BIND:-0.0.0.0}
+SSE_BIND=${SSE_BIND:-0.0.0.0}
+```
+
+- This means:
+  - For local runs, the server binds to localhost.
+  - For Docker, HTTP/SSE containers bind to 0.0.0.0 so they’re reachable from your host.
+
+#### Override on the fly
+
+You can override the bind or port at runtime:
+
+```bash
+# Linux/macOS
+HTTP_BIND=127.0.0.1 docker compose up mcp-http
+
+# Windows PowerShell
+$env:HTTP_BIND="127.0.0.1"; docker compose up mcp-http
+```
+
+To skip Vertica credential checks (for demo or offline runs):
+
+```bash
+SKIP_DB_CHECK=1 docker compose up mcp-http
+```
 
 #### Manual Docker Run
 
