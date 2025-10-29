@@ -173,24 +173,29 @@ Docker deployment is ideal for containerized environments and consistent deploym
 #### Build Docker Image
 
 ```bash
-# Build from Dockerfile
+# Build directly from Dockerfile
 docker build -t vertica-mcp:latest .
 
-# Or use docker-compose for easier management
-docker-compose build
+# Or build via Compose (recommended)
+docker compose build
+
 ```
 
 #### Run with Docker Compose
 
+Compose automatically reads a `.env` file if present.
+Vertica credentials and configuration are loaded from .env, while network binding and transport options
+have Docker-safe defaults (`HTTP_BIND=0.0.0.0`, `SSE_BIND=0.0.0.0`).
+
 ```bash
 # STDIO transport (for direct MCP client connection)
-docker-compose up mcp-stdio
+docker compose up mcp-stdio
 
 # HTTP transport (for web-based access)
-docker-compose up mcp-http
+docker compose up mcp-http
 
 # SSE transport (for real-time streaming)
-docker-compose up mcp-sse
+docker compose up mcp-sse
 ```
 
 #### Manual Docker Run
