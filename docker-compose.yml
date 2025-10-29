@@ -1,36 +1,49 @@
 services:
+  # STDIO transport — no port mappings; keeps TTY off for IDEs
   mcp-stdio:
     build: .
     image: vertica-mcp:latest
     container_name: vertica-mcp-stdio
+    # Load DB credentials and other vars if present (safe to omit locally)
+    env_file: .env
     environment:
-      - TRANSPORT=${TRANSPORT:-stdio}
+      - TRANSPORT=stdio
+      # stdio doesn't listen on a socket, but keeping these harmless defaults is fine
       - PORT=${PORT:-8000}
+      - BIND=${STDIO_BIND:-127.0.0.1}
     stdin_open: true
     tty: false
     entrypoint: ["/usr/local/bin/docker-entrypoint.sh"]
 
+  # HTTP transport — default bind 0.0.0.0 so host can reach the container port
   mcp-http:
     build: .
     image: vertica-mcp:latest
     container_name: vertica-mcp-http
+    env_file: .env
     environment:
-      - TRANSPORT=${TRANSPORT:-http}
-      - BIND=${BIND:-0.0.0.0}
-      - PORT=${PORT:-8000}
+      - TRANSPORT=http
+      # decouple service bind from global BIND; default to 0.0.0.0 for Docker
+      - HTTP_BIND=${HTTP_BIND:-0.0.0.0}
+      - BIND=${HTTP_BIND}
+      - PORT=${HTTP_PORT:-8000}
       - HTTP_PATH=${HTTP_PATH:-/mcp}
     ports:
-      - "${HTTP_HOST_PORT:-8000}:${PORT:-8000}"
+      - "${HTTP_HOST_PORT:-8000}:${HTTP_PORT:-8000}"
     entrypoint: ["/usr/local/bin/docker-entrypoint.sh"]
 
+  # SSE transport — default bind 0.0.0.0 so host can reach the container port
   mcp-sse:
     build: .
     image: vertica-mcp:latest
     container_name: vertica-mcp-sse
+    env_file: .env
     environment:
-      - TRANSPORT=${TRANSPORT:-sse}
-      - BIND=${BIND:-0.0.0.0}
-      - PORT=${PORT:-8000}
+      - TRANSPORT=sse
+      # decouple service bind from global BIND; default to 0.0.0.0 for Docker
+      - SSE_BIND=${SSE_BIND:-0.0.0.0}
+      - BIND=${SSE_BIND}
+      - PORT=${SSE_PORT:-8000}
     ports:
-      - "${SSE_HOST_PORT:-8001}:${PORT:-8000}"
+      - "${SSE_HOST_PORT:-8001}:${SSE_PORT:-8000}"
     entrypoint: ["/usr/local/bin/docker-entrypoint.sh"]
