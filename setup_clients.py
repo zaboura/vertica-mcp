@@ -66,18 +66,32 @@ def main():
         print("\n✅ Found existing .env file")
         
     env_abs_path = str(env_path.absolute())
-    uv_path = "uv" # assumes uv is in PATH
     
-    # Base server config
-    server_config = {
-        "command": uv_path,
-        "args": [
-            "run",
-            "vertica-mcp",
-            "--transport", "stdio",
-            "--env-file", env_abs_path
-        ]
-    }
+    print("\n📦 How did you install Vertica MCP?")
+    print("1. From source (using 'uv') [Default]")
+    print("2. From PyPI (using 'pip install vertica-mcp')")
+    install_method = input("Select an option [1/2]: ").strip()
+    
+    if install_method == "2":
+        server_config = {
+            "command": "vertica-mcp",
+            "args": [
+                "--transport", "stdio",
+                "--env-file", env_abs_path
+            ]
+        }
+    else:
+        # Default to uv
+        uv_path = "uv" # assumes uv is in PATH
+        server_config = {
+            "command": uv_path,
+            "args": [
+                "run",
+                "vertica-mcp",
+                "--transport", "stdio",
+                "--env-file", env_abs_path
+            ]
+        }
     
     print("\n🔌 Configuring AI Clients...")
     
