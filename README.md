@@ -54,9 +54,22 @@ The Model Context Protocol (MCP) is an open standard developed by Anthropic that
 
 ## Quick Start
 
-### Method 1: Local Installation (Development Environment)
+### Method 1: ⚡ 1-Click Client Setup (Recommended)
 
-This method is recommended when you want to modify the code or work with the development version.
+If you want to configure Claude Desktop or Cursor to connect to your Vertica Database instantly, we've provided an automated setup script:
+
+```bash
+# 1. Clone the repository
+git clone https://github.com/zaboura/vertica-mcp.git
+cd vertica-mcp
+
+# 2. Run the interactive setup script
+python setup_clients.py
+```
+
+The script will prompt you for your Vertica credentials, generate your `.env` file, and automatically configure Claude Desktop and Cursor. Simply restart your AI assistant and you're good to go!
+
+### Method 2: Local Installation (Development Environment)
 
 ```bash
 # 1. Clone the repository
@@ -81,7 +94,7 @@ cp .env.example .env
 vertica-mcp --transport http --port 8000 --bind-host 0.0.0.0  # HTTP for remote access
 ```
 
-### Method 2: PyPI Installation (Production Environment)
+### Method 3: PyPI Installation (Production Environment)
 
 This method is recommended for production deployments and when you want to use the stable release.
 
@@ -166,7 +179,7 @@ The inspector will open at `http://localhost:6274` where you can:
 
 For STDIO testing (not recommended due to command complexity), use HTTP transport which provides identical functionality validation with better debugging capabilities.
 
-### Method 3: Docker Deployment
+### Method 4: Docker Deployment
 
 Docker deployment is ideal for containerized environments and consistent deployments across different systems.
 
