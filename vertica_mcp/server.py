@@ -49,13 +49,46 @@ from starlette.requests import Request
 from vertica_mcp.connection import (OperationType, VerticaConfig,
                                     VerticaConnectionManager)
 
+import jwt
+from jwt import PyJWKClient
+
 class AuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        api_key = os.getenv("MCP_API_KEY")
-        if api_key and request.method != "OPTIONS":
-            auth_header = request.headers.get("Authorization")
-            if not auth_header or auth_header != f"Bearer {api_key}":
-                return JSONResponse({"error": "Unauthorized"}, status_code=401)
+        if request.method == "OPTIONS":
+            return await call_next(request)
+
+        issuer = os.getenv("JWT_ISSUER")
+        audience = os.getenv("JWT_AUDIENCE")
+
+        if not issuer or not audience:
+            # Fallback to API Key if JWT is not configured
+            api_key = os.getenv("MCP_API_KEY")
+            if api_key:
+                auth_header = request.headers.get("Authorization")
+                if not auth_header or auth_header != f"Bearer {api_key}":
+                    return JSONResponse({"error": "Unauthorized"}, status_code=401)
+            return await call_next(request)
+
+        auth_header = request.headers.get("Authorization")
+        if not auth_header or not auth_header.startswith("Bearer "):
+            return JSONResponse({"error": "Unauthorized: Missing or invalid Bearer token"}, status_code=401)
+        
+        token = auth_header.split(" ")[1]
+        try:
+            jwks_client = PyJWKClient(f"{issuer.rstrip('/')}/.well-known/jwks.json")
+            signing_key = jwks_client.get_signing_key_from_jwt(token)
+            
+            jwt.decode(
+                token,
+                signing_key.key,
+                algorithms=["RS256"],
+                audience=audience,
+                issuer=issuer
+            )
+        except Exception as e:
+            logging.getLogger("vertica-mcp").error(f"JWT Validation failed: {e}")
+            return JSONResponse({"error": f"Unauthorized: {str(e)}"}, status_code=401)
+
         return await call_next(request)
 
 MCP_SERVER_NAME = "vertica-mcp"
