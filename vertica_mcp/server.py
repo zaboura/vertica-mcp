@@ -42,12 +42,24 @@ import uvicorn
 from dotenv import find_dotenv, load_dotenv
 from mcp.server.fastmcp import Context, FastMCP
 from starlette.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import JSONResponse
+from starlette.requests import Request
 
 from vertica_mcp.connection import (OperationType, VerticaConfig,
                                     VerticaConnectionManager)
 
+class AuthMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        api_key = os.getenv("MCP_API_KEY")
+        if api_key and request.method != "OPTIONS":
+            auth_header = request.headers.get("Authorization")
+            if not auth_header or auth_header != f"Bearer {api_key}":
+                return JSONResponse({"error": "Unauthorized"}, status_code=401)
+        return await call_next(request)
+
 MCP_SERVER_NAME = "vertica-mcp"
-DEPENDENCIES = ["vertica-python", "pydantic", "starlette", "uvicorn"]
+DEPENDENCIES = ["vertica-python", "pydantic", "starlette", "uvicorn", "pyjwt", "cryptography"]
 
 # Configure logging
 logger = logging.getLogger("vertica-mcp")
@@ -362,10 +374,17 @@ async def run_sse(host: str = "localhost", port: int = 8000) -> None:
 
     sse_app = mcp.sse_app()
     
+    # Add auth middleware
+    sse_app.add_middleware(AuthMiddleware)
+
+    cors_origins = [
+        o.strip() for o in os.getenv("MCP_CORS_ORIGINS", "*").split(",") if o.strip()
+    ]
+    
     # Add CORS middleware
     sse_app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=cors_origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -418,10 +437,17 @@ async def run_http(
 
     app = mcp.streamable_http_app()
     
+    # Add auth middleware
+    app.add_middleware(AuthMiddleware)
+
+    cors_origins = [
+        o.strip() for o in os.getenv("MCP_CORS_ORIGINS", "*").split(",") if o.strip()
+    ]
+    
     # Add CORS middleware
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=cors_origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
