@@ -58,3 +58,23 @@ def test_is_operation_allowed_prefers_schema_over_global(monkeypatch):
     from vertica_mcp.connection import OperationType
     assert mgr.is_operation_allowed("public", OperationType.INSERT) is True
     assert mgr.is_operation_allowed("public", OperationType.DDL) is False
+
+def test_oauth_requires_token():
+    from vertica_mcp.connection import VerticaConnectionPool
+    config = VerticaConfig(host="localhost", port=5433, database="db", user="u", password="", auth_mode="oauth", oauth_token="")
+    try:
+        pool = VerticaConnectionPool(config)
+        pool._get_connection_config()
+        assert False, "Should have raised ValueError for missing oauth token"
+    except ValueError as e:
+        assert "oauth_token is required" in str(e)
+
+def test_mtls_requires_certs():
+    from vertica_mcp.connection import VerticaConnectionPool
+    config = VerticaConfig(host="localhost", port=5433, database="db", user="u", password="", auth_mode="mtls", ssl_cert="", ssl_key="")
+    try:
+        pool = VerticaConnectionPool(config)
+        pool._get_connection_config()
+        assert False, "Should have raised ValueError for missing certs"
+    except ValueError as e:
+        assert "ssl_cert and ssl_key are required" in str(e)

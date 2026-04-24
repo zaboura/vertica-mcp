@@ -26,6 +26,7 @@
 
 import logging
 import os
+import ssl
 import threading
 from dataclasses import dataclass
 from enum import Enum, auto
@@ -43,6 +44,12 @@ VERTICA_PASSWORD = "VERTICA_PASSWORD"
 VERTICA_CONNECTION_LIMIT = "VERTICA_CONNECTION_LIMIT"
 VERTICA_SSL = "VERTICA_SSL"
 VERTICA_SSL_REJECT_UNAUTHORIZED = "VERTICA_SSL_REJECT_UNAUTHORIZED"
+VERTICA_AUTH_MODE = "VERTICA_AUTH_MODE"
+VERTICA_OAUTH_TOKEN = "VERTICA_OAUTH_TOKEN"
+VERTICA_KERBEROS_SERVICE = "VERTICA_KERBEROS_SERVICE"
+VERTICA_KERBEROS_HOST = "VERTICA_KERBEROS_HOST"
+VERTICA_SSL_CERT = "VERTICA_SSL_CERT"
+VERTICA_SSL_KEY = "VERTICA_SSL_KEY"
 
 # Configure logging
 logger = logging.getLogger("vertica-mcp")
@@ -81,6 +88,12 @@ class VerticaConfig:
     connection_limit: int = 10
     ssl: bool = False
     ssl_reject_unauthorized: bool = True
+    auth_mode: str = "basic"
+    oauth_token: str = ""
+    kerberos_service: str = ""
+    kerberos_host: str = ""
+    ssl_cert: str = ""
+    ssl_key: str = ""
     # Global operation permissions
     allow_insert: bool = False
     allow_update: bool = False
@@ -132,6 +145,12 @@ class VerticaConfig:
                 "VERTICA_SSL_REJECT_UNAUTHORIZED", "true"
             ).lower()
             == "true",
+            auth_mode=os.getenv("VERTICA_AUTH_MODE", "basic").lower(),
+            oauth_token=os.getenv("VERTICA_OAUTH_TOKEN", ""),
+            kerberos_service=os.getenv("VERTICA_KERBEROS_SERVICE", ""),
+            kerberos_host=os.getenv("VERTICA_KERBEROS_HOST", ""),
+            ssl_cert=os.getenv("VERTICA_SSL_CERT", ""),
+            ssl_key=os.getenv("VERTICA_SSL_KEY", ""),
             allow_insert=os.getenv("ALLOW_INSERT_OPERATION", "false").lower() == "true",
             allow_update=os.getenv("ALLOW_UPDATE_OPERATION", "false").lower() == "true",
             allow_delete=os.getenv("ALLOW_DELETE_OPERATION", "false").lower() == "true",
@@ -164,20 +183,46 @@ class VerticaConnectionPool:
         self.close_all()
 
     def _get_connection_config(self) -> Dict[str, Any]:
-        """Get connection configuration with SSL settings if enabled."""
+        """Get connection configuration with SSL and auth settings."""
         config = {
             "host": self.config.host,
             "port": self.config.port,
             "database": self.config.database,
             "user": self.config.user,
-            "password": self.config.password,
         }
 
-        if self.config.ssl:
-            config["ssl"] = True
-            config["ssl_reject_unauthorized"] = self.config.ssl_reject_unauthorized
+        # Authentication modes
+        if self.config.auth_mode == "basic":
+            config["password"] = self.config.password
+        elif self.config.auth_mode == "oauth":
+            if not self.config.oauth_token:
+                raise ValueError("oauth_token is required for oauth authentication mode")
+            config["oauth_access_token"] = self.config.oauth_token
+        elif self.config.auth_mode == "kerberos":
+            if self.config.kerberos_service:
+                config["kerberos_service_name"] = self.config.kerberos_service
+            if self.config.kerberos_host:
+                config["kerberos_host_name"] = self.config.kerberos_host
+
+        # SSL Configuration (including mTLS support)
+        if self.config.ssl or self.config.auth_mode == "mtls":
+            if self.config.auth_mode == "mtls" and (not self.config.ssl_cert or not self.config.ssl_key):
+                raise ValueError("ssl_cert and ssl_key are required for mtls authentication mode")
+
+            if self.config.ssl_cert and self.config.ssl_key:
+                # mTLS setup
+                context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+                context.load_cert_chain(certfile=self.config.ssl_cert, keyfile=self.config.ssl_key)
+                if not self.config.ssl_reject_unauthorized:
+                    context.check_hostname = False
+                    context.verify_mode = ssl.CERT_NONE
+                config["ssl"] = context
+            else:
+                config["ssl"] = True
+                config["ssl_reject_unauthorized"] = self.config.ssl_reject_unauthorized
         else:
             config["tlsmode"] = "disable"
+            
         logger.debug("Connection config: %s", self._get_safe_config(config))
         return config
 
@@ -186,6 +231,8 @@ class VerticaConnectionPool:
         safe_config = config.copy()
         if "password" in safe_config:
             safe_config["password"] = "********"
+        if "oauth_access_token" in safe_config:
+            safe_config["oauth_access_token"] = "********"
         return safe_config
 
     def _initialize_pool(self):
