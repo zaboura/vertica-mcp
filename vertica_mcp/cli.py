@@ -25,10 +25,16 @@ import os
 import click
 from dotenv import load_dotenv
 
-from .connection import (VERTICA_CONNECTION_LIMIT, VERTICA_DATABASE,
-                         VERTICA_HOST, VERTICA_PASSWORD, VERTICA_PORT,
-                         VERTICA_SSL, VERTICA_SSL_REJECT_UNAUTHORIZED,
-                         VERTICA_USER)
+from .connection import (
+    VERTICA_CONNECTION_LIMIT,
+    VERTICA_DATABASE,
+    VERTICA_HOST,
+    VERTICA_PASSWORD,
+    VERTICA_PORT,
+    VERTICA_SSL,
+    VERTICA_SSL_REJECT_UNAUTHORIZED,
+    VERTICA_USER,
+)
 from .server import run_http, run_sse, run_stdio
 from .utils import setup_logger
 
@@ -83,10 +89,10 @@ def main(
         os.environ[VERTICA_SSL_REJECT_UNAUTHORIZED] = str(
             ssl_reject_unauthorized
         ).lower()
-        
+
     actual_bind_host = bind_host if transport in ["http", "sse"] else "localhost"
     # Fixed transport logic
-    transport_lower = transport.lower() # ← Convert to lowercase
+    transport_lower = transport.lower()  # ← Convert to lowercase
 
     # Dispatch to transport method
     if transport_lower == "stdio":
@@ -145,28 +151,28 @@ SCHEMA_UPDATE_PERMISSIONS=staging:true,production:false
 SCHEMA_DELETE_PERMISSIONS=staging:false,production:false
 SCHEMA_DDL_PERMISSIONS=staging:false,production:false
 """
-    
-    if os.path.exists('.env'):
+
+    if os.path.exists(".env"):
         click.echo("Configuration file '.env' already exists.")
         if click.confirm("Do you want to overwrite it?"):
-            with open('.env', 'w') as f:
+            with open(".env", "w") as f:
                 f.write(env_content)
             click.echo("Configuration file '.env' has been overwritten.")
         else:
             click.echo("Configuration file creation cancelled.")
         return
-        
-    with open('.env', 'w') as f:
+
+    with open(".env", "w") as f:
         f.write(env_content)
     click.echo("Created '.env' configuration file.")
-    click.echo("Please edit it with your Vertica database credentials before running the server.")
+    click.echo(
+        "Please edit it with your Vertica database credentials before running the server."
+    )
 
 
 @click.command()
 @click.option(
-    "--init",
-    is_flag=True,
-    help="Initialize configuration file (.env) and exit"
+    "--init", is_flag=True, help="Initialize configuration file (.env) and exit"
 )
 @click.option(
     "-v",
@@ -175,9 +181,7 @@ SCHEMA_DDL_PERMISSIONS=staging:false,production:false
     help="Increase verbosity (can be used multiple times, e.g., -v, -vv, -vvv)",
 )
 @click.option(
-    "--env-file", 
-    type=click.Path(exists=True, dir_okay=False), 
-    help="Path to .env file"
+    "--env-file", type=click.Path(exists=True, dir_okay=False), help="Path to .env file"
 )
 @click.option(
     "--transport",
@@ -257,15 +261,15 @@ SCHEMA_DDL_PERMISSIONS=staging:false,production:false
 )
 def cli(init, **kwargs):
     """MCP Vertica Server - Vertica functionality for MCP
-    
+
     Examples:
         vertica-mcp --init                    # Create configuration file
-        vertica-mcp --transport stdio         # Start with STDIO transport  
+        vertica-mcp --transport stdio         # Start with STDIO transport
         vertica-mcp --transport http --port 8000  # Start HTTP server
         vertica-mcp -vvv --transport stdio    # Start with debug logging
     """
     if init:
         create_env_file()
         return
-    
+
     main(**kwargs)

@@ -26,32 +26,35 @@
 
 import asyncio
 import logging
-import sys
 import os
 import re
 import socket
+import sys
 import time
 import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import datetime
 from functools import lru_cache
-from typing import Any, Dict, List, Optional
-
-import uvicorn
-from dotenv import find_dotenv, load_dotenv
-from mcp.server.fastmcp import Context, FastMCP
-from starlette.middleware.cors import CORSMiddleware
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.responses import JSONResponse
-from starlette.requests import Request
-import vertica_python
-
-from vertica_mcp.connection import (OperationType, VerticaConfig,
-                                    VerticaConnectionManager)
+from typing import Any
 
 import jwt
+import uvicorn
+import vertica_python
+from dotenv import find_dotenv, load_dotenv
 from jwt import PyJWKClient
+from mcp.server.fastmcp import Context, FastMCP
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.cors import CORSMiddleware
+from starlette.requests import Request
+from starlette.responses import JSONResponse
+
+from vertica_mcp.connection import (
+    OperationType,
+    VerticaConfig,
+    VerticaConnectionManager,
+)
+
 
 class AuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
@@ -72,8 +75,11 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
         auth_header = request.headers.get("Authorization")
         if not auth_header or not auth_header.startswith("Bearer "):
-            return JSONResponse({"error": "Unauthorized: Missing or invalid Bearer token"}, status_code=401)
-        
+            return JSONResponse(
+                {"error": "Unauthorized: Missing or invalid Bearer token"},
+                status_code=401,
+            )
+
         token = auth_header.split(" ")[1]
         try:
             jwks_client = PyJWKClient(f"{issuer.rstrip('/')}/.well-known/jwks.json")
@@ -83,24 +89,42 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 signing_key.key,
                 algorithms=["RS256"],
                 audience=audience,
-                issuer=issuer
+                issuer=issuer,
             )
         except jwt.ExpiredSignatureError:
             logging.getLogger("vertica-mcp").warning("JWT token has expired")
-            return JSONResponse({"error": "Unauthorized: Token has expired"}, status_code=401)
+            return JSONResponse(
+                {"error": "Unauthorized: Token has expired"}, status_code=401
+            )
         except jwt.InvalidTokenError as e:
             # SECURITY: Log details server-side but return generic message to prevent information disclosure
-            logging.getLogger("vertica-mcp").warning(f"JWT validation failed: {type(e).__name__} - {str(e)}")
-            return JSONResponse({"error": "Unauthorized: Invalid token"}, status_code=401)
+            logging.getLogger("vertica-mcp").warning(
+                f"JWT validation failed: {type(e).__name__} - {str(e)}"
+            )
+            return JSONResponse(
+                {"error": "Unauthorized: Invalid token"}, status_code=401
+            )
         except Exception as e:
             # SECURITY: Generic error message to prevent leaking JWT configuration details
-            logging.getLogger("vertica-mcp").error(f"Unexpected JWT error: {type(e).__name__} - {str(e)}")
-            return JSONResponse({"error": "Unauthorized: Authentication error"}, status_code=401)
+            logging.getLogger("vertica-mcp").error(
+                f"Unexpected JWT error: {type(e).__name__} - {str(e)}"
+            )
+            return JSONResponse(
+                {"error": "Unauthorized: Authentication error"}, status_code=401
+            )
 
         return await call_next(request)
 
+
 MCP_SERVER_NAME = "vertica-mcp"
-DEPENDENCIES = ["vertica-python", "pydantic", "starlette", "uvicorn", "pyjwt", "cryptography"]
+DEPENDENCIES = [
+    "vertica-python",
+    "pydantic",
+    "starlette",
+    "uvicorn",
+    "pyjwt",
+    "cryptography",
+]
 
 # Configure logging
 logger = logging.getLogger("vertica-mcp")
@@ -120,9 +144,9 @@ MAX_PAGINATION_ROWS = 100  # Maximum rows per page in pagination
 CONNECTION_HEALTH_CHECK_INTERVAL = int(os.getenv("VERTICA_HEALTH_CHECK_INTERVAL", "60"))
 
 # Cache for metadata queries
-metadata_cache: Dict[str, tuple[Any, float]] = {}
+metadata_cache: dict[str, tuple[Any, float]] = {}
 # Rate limiting tracking
-rate_limit_tracker: Dict[str, List[float]] = {}
+rate_limit_tracker: dict[str, list[float]] = {}
 
 
 def _strip_sql_comments(q: str) -> str:
@@ -171,14 +195,20 @@ def _sanitize_query(query: str) -> str:
 
     # BLACKLIST: Comprehensive dangerous pattern detection (defense-in-depth)
     dangerous_patterns = [
-        (r";\s*(DROP|DELETE|UPDATE|INSERT|ALTER|CREATE|TRUNCATE|GRANT|REVOKE)\s+", "SQL command injection"),
+        (
+            r";\s*(DROP|DELETE|UPDATE|INSERT|ALTER|CREATE|TRUNCATE|GRANT|REVOKE)\s+",
+            "SQL command injection",
+        ),
         (r"(xp_cmdshell|sp_executesql|exec\s*\()", "Command execution attempt"),
         (r"(EXPORT_OBJECTS|COPY\s+.*\s+TO)", "Vertica-specific data exfiltration"),
         (r"--[^\n]*\bOR\b", "Comment-based SQL injection"),
         (r"/\*.*\bOR\b.*\*/", "Block comment injection"),
         (r"\bUNION\s+ALL\s+SELECT", "UNION-based injection"),
         (r"\bOR\s+['\"]?\d+['\"]?\s*=\s*['\"]?\d+", "Boolean-based injection (OR 1=1)"),
-        (r"\bAND\s+['\"]?\d+['\"]?\s*=\s*['\"]?\d+", "Boolean-based injection (AND 1=1)"),
+        (
+            r"\bAND\s+['\"]?\d+['\"]?\s*=\s*['\"]?\d+",
+            "Boolean-based injection (AND 1=1)",
+        ),
         (r"';.*--", "SQL termination with comment"),
         (r"\b(SLEEP|WAITFOR|BENCHMARK|PG_SLEEP)\s*\(", "Time-based blind injection"),
     ]
@@ -189,7 +219,9 @@ def _sanitize_query(query: str) -> str:
 
     # Check for excessive length (potential DoS)
     if len(query) > 50000:  # 50KB max
-        raise ValueError(f"Query too long ({len(query)} chars). Maximum 50,000 characters allowed.")
+        raise ValueError(
+            f"Query too long ({len(query)} chars). Maximum 50,000 characters allowed."
+        )
 
     return query
 
@@ -213,7 +245,7 @@ def _check_rate_limit(client_id: str) -> bool:
 
 
 @lru_cache(maxsize=128)
-def _get_cached_metadata(cache_key: str) -> Optional[Any]:
+def _get_cached_metadata(cache_key: str) -> Any | None:
     """Get cached metadata if not expired."""
     if cache_key in metadata_cache:
         data, timestamp = metadata_cache[cache_key]
@@ -240,14 +272,25 @@ async def _validate_connection(conn) -> bool:
     except Exception:
         return False
 
-async def _execute_query_async(manager: VerticaConnectionManager, query: str, params: Any = None, fetch: str = "all", timeout: int = 30, commit: bool = False, max_rows: int = 1000) -> Any:
+
+async def _execute_query_async(
+    manager: VerticaConnectionManager,
+    query: str,
+    params: Any = None,
+    fetch: str = "all",
+    timeout: int = 30,
+    commit: bool = False,
+    max_rows: int = 1000,
+) -> Any:
     """Safely execute a query in a background thread without blocking the async event loop."""
 
     # SECURITY: Validate timeout is an integer to prevent SQL injection
     try:
         timeout = int(timeout)
         if timeout < 1 or timeout > 3600:  # 1 second to 1 hour max
-            raise ValueError(f"timeout must be between 1 and 3600 seconds, got {timeout}")
+            raise ValueError(
+                f"timeout must be between 1 and 3600 seconds, got {timeout}"
+            )
     except (TypeError, ValueError) as e:
         raise ValueError(f"Invalid timeout parameter: {e}")
 
@@ -261,25 +304,33 @@ async def _execute_query_async(manager: VerticaConnectionManager, query: str, pa
                 cursor.execute(query, params)
             else:
                 cursor.execute(query)
-            
+
             result = None
             if fetch == "all":
-                result = cursor.fetchall(), [col.name for col in cursor.description] if cursor.description else []
+                result = cursor.fetchall(), (
+                    [col.name for col in cursor.description]
+                    if cursor.description
+                    else []
+                )
             elif fetch == "many":
-                result = cursor.fetchmany(max_rows), [col.name for col in cursor.description] if cursor.description else []
+                result = cursor.fetchmany(max_rows), (
+                    [col.name for col in cursor.description]
+                    if cursor.description
+                    else []
+                )
             elif fetch == "none":
                 result = getattr(cursor, "rowcount", None), []
-            
+
             if commit:
                 conn.commit()
-                
+
             return result
         except vertica_python.errors.Error as e:
             logger.error(f"Database error executing query: {e}")
             raise
         finally:
             manager.release_connection(conn)
-            
+
     return await asyncio.to_thread(_sync_execute)
 
 
@@ -307,7 +358,9 @@ def extract_schema_from_query(query: str) -> str | None:
     return None
 
 
-def _print_banner(transport: str, endpoint: str | None, *, to_stderr: bool = False) -> None:
+def _print_banner(
+    transport: str, endpoint: str | None, *, to_stderr: bool = False
+) -> None:
     """Pretty banner without polluting STDOUT for stdio."""
     out = sys.stderr if to_stderr else sys.stdout
     width = 100
@@ -322,20 +375,30 @@ def _print_banner(transport: str, endpoint: str | None, *, to_stderr: bool = Fal
 
     # Endpoint line (optional, truncated if too long)
     if endpoint:
-        max_ep_len = width - len("  Endpoint  : ") 
-        ep = endpoint if len(endpoint) <= max_ep_len else endpoint[: max_ep_len - 1] + "…"
+        max_ep_len = width - len("  Endpoint  : ")
+        ep = (
+            endpoint
+            if len(endpoint) <= max_ep_len
+            else endpoint[: max_ep_len - 1] + "…"
+        )
         print(f"║  Endpoint  : {ep:<{max_ep_len}}║", file=out, flush=True)
 
     # Status line
-    pad_s = width - len("  Status    : Ready") 
+    pad_s = width - len("  Status    : Ready")
     print(f"║  Status    : Ready{' ' * pad_s}║", file=out, flush=True)
     print(f"╚{'═' * width}╝\n", file=out, flush=True)
+
+
 async def run_stdio() -> None:
     """Launch the MCP server with STDIO transport (safe banner on STDERR)."""
     logger.info("Starting MCP server with STDIO transport")
 
     _print_banner("STDIO", None, to_stderr=True)
-    print("📝 Connect MCP clients via STDIO integration (no URL)", file=sys.stderr, flush=True)
+    print(
+        "📝 Connect MCP clients via STDIO integration (no URL)",
+        file=sys.stderr,
+        flush=True,
+    )
 
     # Prefer the async stdio runner if present
     if hasattr(mcp, "run_stdio_async"):
@@ -383,20 +446,28 @@ async def server_lifespan(_server: FastMCP) -> AsyncIterator[dict[str, Any]]:
     if jwt_issuer or jwt_audience:
         # Both must be set if either is present
         if not jwt_issuer:
-            raise EnvironmentError("JWT_AUDIENCE is set but JWT_ISSUER is missing. Both must be configured together.")
+            raise OSError(
+                "JWT_AUDIENCE is set but JWT_ISSUER is missing. Both must be configured together."
+            )
         if not jwt_audience:
-            raise EnvironmentError("JWT_ISSUER is set but JWT_AUDIENCE is missing. Both must be configured together.")
+            raise OSError(
+                "JWT_ISSUER is set but JWT_AUDIENCE is missing. Both must be configured together."
+            )
         # Validate issuer looks like a URL
         if not jwt_issuer.startswith(("http://", "https://")):
-            raise EnvironmentError(f"JWT_ISSUER must be a valid HTTP/HTTPS URL, got: {jwt_issuer!r}")
-        logger.info(f"JWT authentication enabled: issuer={jwt_issuer}, audience={jwt_audience}")
+            raise OSError(
+                f"JWT_ISSUER must be a valid HTTP/HTTPS URL, got: {jwt_issuer!r}"
+            )
+        logger.info(
+            f"JWT authentication enabled: issuer={jwt_issuer}, audience={jwt_audience}"
+        )
     else:
         api_key = os.getenv("MCP_API_KEY")
         if api_key:
             logger.info("API key authentication enabled (JWT not configured)")
         else:
             # CRITICAL SECURITY: Refuse to start without authentication in production
-            raise EnvironmentError(
+            raise OSError(
                 "SECURITY ERROR: No authentication configured. Server cannot start without authentication. "
                 "Set JWT_ISSUER + JWT_AUDIENCE for JWT auth, or MCP_API_KEY for API key auth. "
                 "This check prevents accidental deployment of an unauthenticated server."
@@ -515,7 +586,7 @@ async def run_sse(host: str = "localhost", port: int = 8000) -> None:
     logger.info(f"Starting MCP server with SSE transport on {host}:{port}")
 
     sse_app = mcp.sse_app()
-    
+
     # Add auth middleware
     sse_app.add_middleware(AuthMiddleware)
 
@@ -532,7 +603,7 @@ async def run_sse(host: str = "localhost", port: int = 8000) -> None:
 
         # CRITICAL SECURITY CHECK: Forbid wildcard with credentials
         if "*" in cors_origins:
-            raise EnvironmentError(
+            raise OSError(
                 "SECURITY ERROR: Cannot use CORS wildcard (*) with allow_credentials=True. "
                 "This combination allows any website to steal user credentials. "
                 "Set MCP_CORS_ORIGINS to explicit domain list: 'https://app1.com,https://app2.com'"
@@ -572,7 +643,8 @@ async def run_sse(host: str = "localhost", port: int = 8000) -> None:
     except Exception as e:
         logger.error(f"Server error: {e}")
         raise
-    
+
+
 async def run_http(
     host: str = "127.0.0.1",
     port: int = 8000,
@@ -610,7 +682,7 @@ async def run_http(
 
         # CRITICAL SECURITY CHECK: Forbid wildcard with credentials
         if "*" in cors_origins:
-            raise EnvironmentError(
+            raise OSError(
                 "SECURITY ERROR: Cannot use CORS wildcard (*) with allow_credentials=True. "
                 "This combination allows any website to steal user credentials. "
                 "Set MCP_CORS_ORIGINS to explicit domain list: 'https://app1.com,https://app2.com'"
@@ -644,11 +716,11 @@ async def run_http(
     except Exception as e:
         logger.error(f"Server error: {e}")
         raise
-    
 
-#--------------------------------------------
-#---------- Run Query Safely ------------------
-#--------------------------------------------
+
+# --------------------------------------------
+# ---------- Run Query Safely ------------------
+# --------------------------------------------
 @mcp.tool()
 async def run_query_safely(
     ctx: Context,
@@ -659,7 +731,7 @@ async def run_query_safely(
     page_limit: int = 2000,
     include_columns: bool = True,
     precount: bool = False,
-    timeout: Optional[int] = None,
+    timeout: int | None = None,
 ) -> dict:
     """
     Safe query execution with size detection, pagination, and timeout support.
@@ -678,9 +750,8 @@ async def run_query_safely(
 
     # SECURITY FIX (P2-1): Rate limiting requires authenticated client_id
     # Prevent bypass by sharing "default" bucket across all unauthenticated users
-    client_id = (
-        getattr(ctx.request_context, "client_id", None)
-        or getattr(ctx.request_context, "connection_id", None)
+    client_id = getattr(ctx.request_context, "client_id", None) or getattr(
+        ctx.request_context, "connection_id", None
     )
 
     if not client_id:
@@ -734,7 +805,11 @@ async def run_query_safely(
                 OperationType.DELETE,
             ]
             affected, _ = await _execute_query_async(
-                manager, query, fetch="none", timeout=query_timeout, commit=commit_needed
+                manager,
+                query,
+                fetch="none",
+                timeout=query_timeout,
+                commit=commit_needed,
             )
             await ctx.info(f"Non-SELECT executed, affected_rows={affected}")
             return {"ok": True, "affected_rows": affected}
@@ -753,7 +828,9 @@ async def run_query_safely(
         probe_sql = f"{_wrap_subquery(query)} LIMIT {probe_limit}"
 
         try:
-            rows, cols = await _execute_query_async(manager, probe_sql, timeout=query_timeout)
+            rows, cols = await _execute_query_async(
+                manager, probe_sql, timeout=query_timeout
+            )
             if not include_columns:
                 cols = None
 
@@ -763,7 +840,9 @@ async def run_query_safely(
             exact_count = None
             if is_large and precount:
                 await ctx.info("Computing exact COUNT(*)")
-                count_rows, _ = await _execute_query_async(manager, f"SELECT COUNT(*) FROM ({query}) q", timeout=query_timeout)
+                count_rows, _ = await _execute_query_async(
+                    manager, f"SELECT COUNT(*) FROM ({query}) q", timeout=query_timeout
+                )
                 exact_count = int(count_rows[0][0]) if count_rows else 0
 
             if not is_large:
@@ -838,9 +917,9 @@ async def run_query_safely(
         raise RuntimeError(f"Unknown mode: {mode}")
 
 
-#--------------------------------------------
-#---------- Execute Query Paginated ------------------
-#--------------------------------------------
+# --------------------------------------------
+# ---------- Execute Query Paginated ------------------
+# --------------------------------------------
 @mcp.tool()
 async def execute_query_paginated(
     ctx: Context,
@@ -848,7 +927,7 @@ async def execute_query_paginated(
     limit: int = 2000,
     offset: int = 0,
     include_columns: bool = True,
-    timeout: Optional[int] = None,
+    timeout: int | None = None,
 ) -> dict:
     """Execute query with pagination support and result size limits."""
     await ctx.info(f"Paginated query: limit={limit}, offset={offset}")
@@ -866,7 +945,9 @@ async def execute_query_paginated(
     query_timeout = timeout or QUERY_TIMEOUT
 
     try:
-        rows, cols = await _execute_query_async(manager, paged_sql, timeout=query_timeout)
+        rows, cols = await _execute_query_async(
+            manager, paged_sql, timeout=query_timeout
+        )
         if not include_columns:
             cols = None
 
@@ -896,16 +977,17 @@ async def execute_query_paginated(
         logger.exception("Unexpected error in paginated query")
         raise RuntimeError(f"Unexpected error: {str(e)}") from e
 
-#--------------------------------------------
-#---------- Execute Query Stream ------------------
-#--------------------------------------------
+
+# --------------------------------------------
+# ---------- Execute Query Stream ------------------
+# --------------------------------------------
 @mcp.tool()
 async def execute_query_stream(
     ctx: Context,
     query: str,
     batch_size: int = 1000,
     max_rows: int = 100000,
-    timeout: Optional[int] = None,
+    timeout: int | None = None,
 ) -> dict:
     """Stream query results with batching and size limits."""
     await ctx.info(f"Streaming query with batch_size={batch_size}")
@@ -954,7 +1036,8 @@ async def execute_query_stream(
             return {
                 "result": all_results,
                 "total_rows": total_rows,
-                "truncated": total_rows >= max_rows or total_size_mb >= MAX_RESULT_SIZE_MB,
+                "truncated": total_rows >= max_rows
+                or total_size_mb >= MAX_RESULT_SIZE_MB,
                 "size_mb": round(total_size_mb, 2),
             }
 
@@ -976,9 +1059,9 @@ async def execute_query_stream(
         raise RuntimeError(error_msg) from e
 
 
-#--------------------------------------------
-#---------- Get Table Structure ------------------
-#--------------------------------------------
+# --------------------------------------------
+# ---------- Get Table Structure ------------------
+# --------------------------------------------
 @mcp.tool()
 async def get_table_structure(
     ctx: Context, table_name: str, schema_name: str = "public"
@@ -1010,12 +1093,16 @@ async def get_table_structure(
             WHERE table_schema = %s AND table_name = %s;
         """
     try:
-        columns, _ = await _execute_query_async(manager, query, (schema_name, table_name))
+        columns, _ = await _execute_query_async(
+            manager, query, (schema_name, table_name)
+        )
 
         if not columns:
             raise RuntimeError(f"Table not found: {schema_name}.{table_name}")
 
-        constraints, _ = await _execute_query_async(manager, constraint_query, (schema_name, table_name))
+        constraints, _ = await _execute_query_async(
+            manager, constraint_query, (schema_name, table_name)
+        )
 
         # Format result
         result = f"Table: {schema_name}.{table_name}\n\nColumns:\n"
@@ -1075,7 +1162,9 @@ async def get_table_projections(
     """
 
     try:
-        projections, _ = await _execute_query_async(manager, query, (schema_name, table_name))
+        projections, _ = await _execute_query_async(
+            manager, query, (schema_name, table_name)
+        )
 
         if not projections:
             raise RuntimeError(f"No projections found for {schema_name}.{table_name}")
@@ -1101,9 +1190,9 @@ async def get_table_projections(
         raise RuntimeError(error_msg) from e
 
 
-#--------------------------------------------
-#---------- Get Schema Views ------------------
-#--------------------------------------------
+# --------------------------------------------
+# ---------- Get Schema Views ------------------
+# --------------------------------------------
 @mcp.tool()
 async def get_schema_views(ctx: Context, schema_name: str = "public") -> dict:
     """List views in schema with caching."""
@@ -1149,9 +1238,9 @@ async def get_schema_views(ctx: Context, schema_name: str = "public") -> dict:
         raise RuntimeError(error_msg) from e
 
 
-#--------------------------------------------
-#---------- Get Schema Tables ------------------
-#--------------------------------------------
+# --------------------------------------------
+# ---------- Get Schema Tables ------------------
+# --------------------------------------------
 @mcp.tool()
 async def get_schema_tables(ctx: Context, schema_name: str = "public") -> dict:
     """List tables in schema with caching."""
@@ -1196,9 +1285,10 @@ async def get_schema_tables(ctx: Context, schema_name: str = "public") -> dict:
         await ctx.error(error_msg)
         raise RuntimeError(error_msg) from e
 
-#--------------------------------------------
-#---------- Get Database Schemas ------------------
-#--------------------------------------------
+
+# --------------------------------------------
+# ---------- Get Database Schemas ------------------
+# --------------------------------------------
 @mcp.tool()
 async def get_database_schemas(ctx: Context) -> dict:
     """List database schemas with caching."""
@@ -1242,9 +1332,10 @@ async def get_database_schemas(ctx: Context) -> dict:
         await ctx.error(error_msg)
         raise RuntimeError(error_msg) from e
 
-#--------------------------------------------
-#---------- Profile Query ------------------
-#--------------------------------------------
+
+# --------------------------------------------
+# ---------- Profile Query ------------------
+# --------------------------------------------
 def _inject_label(sql: str, label: str) -> str:
     """Insert /*+LABEL('...')*/ after the first top-level SELECT."""
     # 1) Strip any existing label hints
@@ -1262,7 +1353,7 @@ def _inject_label(sql: str, label: str) -> str:
     in_sq = False  # '...'
     in_dq = False  # "..."
     in_block = False  # /* ... */
-    in_line = False   # -- ...
+    in_line = False  # -- ...
 
     def is_word_char(ch: str) -> bool:
         return ch.isalnum() or ch == "_"
@@ -1271,7 +1362,12 @@ def _inject_label(sql: str, label: str) -> str:
         ch = s[i]
 
         # line comment
-        if not (in_sq or in_dq or in_block) and ch == "-" and i + 1 < n and s[i+1] == "-":
+        if (
+            not (in_sq or in_dq or in_block)
+            and ch == "-"
+            and i + 1 < n
+            and s[i + 1] == "-"
+        ):
             in_line = True
             i += 2
             while i < n and s[i] not in "\r\n":
@@ -1281,11 +1377,16 @@ def _inject_label(sql: str, label: str) -> str:
             continue
 
         # block comment
-        if not (in_sq or in_dq or in_line) and ch == "/" and i + 1 < n and s[i+1] == "*":
+        if (
+            not (in_sq or in_dq or in_line)
+            and ch == "/"
+            and i + 1 < n
+            and s[i + 1] == "*"
+        ):
             in_block = True
             i += 2
             while i < n - 1:
-                if s[i] == "*" and s[i+1] == "/":
+                if s[i] == "*" and s[i + 1] == "/":
                     in_block = False
                     i += 2
                     break
@@ -1298,7 +1399,7 @@ def _inject_label(sql: str, label: str) -> str:
         # strings
         if not in_dq and ch == "'":
             # handle escaped ''
-            if in_sq and i + 1 < n and s[i+1] == "'":
+            if in_sq and i + 1 < n and s[i + 1] == "'":
                 i += 2
                 continue
             in_sq = not in_sq
@@ -1307,7 +1408,7 @@ def _inject_label(sql: str, label: str) -> str:
 
         if not in_sq and ch == '"':
             # handle escaped ""
-            if in_dq and i + 1 < n and s[i+1] == '"':
+            if in_dq and i + 1 < n and s[i + 1] == '"':
                 i += 2
                 continue
             in_dq = not in_dq
@@ -1331,12 +1432,12 @@ def _inject_label(sql: str, label: str) -> str:
 
         # first top-level SELECT
         if depth == 0 and (ch == "s" or ch == "S") and i + 6 <= n:
-            word = s[i:i+6]
+            word = s[i : i + 6]
             if word.lower() == "select":
-                prev_ok = (i == 0) or (not is_word_char(s[i-1]))
-                next_ok = (i + 6 == n) or (not is_word_char(s[i+6]))
+                prev_ok = (i == 0) or (not is_word_char(s[i - 1]))
+                next_ok = (i + 6 == n) or (not is_word_char(s[i + 6]))
                 if prev_ok and next_ok:
-                    return s[:i+6] + f" /*+LABEL('{label}')*/" + s[i+6:]
+                    return s[: i + 6] + f" /*+LABEL('{label}')*/" + s[i + 6 :]
 
         i += 1
 
@@ -1346,7 +1447,7 @@ def _inject_label(sql: str, label: str) -> str:
 
 @mcp.tool()
 async def profile_query(
-    ctx: Context, query: str, timeout: Optional[int] = None
+    ctx: Context, query: str, timeout: int | None = None
 ) -> dict:
     """Profile query execution with improved error handling."""
     await ctx.info("Profiling query")
@@ -1373,29 +1474,36 @@ async def profile_query(
             execution_time = time.time() - start_time
 
             import time as _time
+
             _time.sleep(1)  # Wait for monitoring data to be recorded
 
             # Strategy 1: query_profiles table
             trxid = stmtid = duration_us = None
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT transaction_id, statement_id, query_duration_us
                 FROM v_monitor.query_profiles
                 WHERE identifier = %s
                 ORDER BY query_start_epoch DESC
                 LIMIT 1
-            """, (label,))
+            """,
+                (label,),
+            )
             row = cursor.fetchone()
             if row:
                 trxid, stmtid, duration_us = row
             else:
                 # Strategy 2: query_requests table
-                cursor.execute("""
+                cursor.execute(
+                    """
                     SELECT transaction_id, statement_id, request_duration_ms
                     FROM v_monitor.query_requests
                     WHERE request_label = %s
                     ORDER BY start_timestamp DESC
                     LIMIT 1
-                """, (label,))
+                """,
+                    (label,),
+                )
                 row = cursor.fetchone()
                 if row:
                     trxid, stmtid, duration_ms = row
@@ -1403,13 +1511,16 @@ async def profile_query(
 
             if not trxid:
                 # Strategy 3: Look for recent queries
-                cursor.execute("""
+                cursor.execute(
+                    """
                     SELECT transaction_id, statement_id, query_duration_us
                     FROM v_monitor.query_profiles
                     WHERE query_start_epoch > %s
                     ORDER BY query_start_epoch DESC
                     LIMIT 5
-                """, (start_time - 5,))
+                """,
+                    (start_time - 5,),
+                )
                 recent_queries = cursor.fetchall()
                 if recent_queries:
                     trxid, stmtid, duration_us = recent_queries[0]
@@ -1420,20 +1531,27 @@ async def profile_query(
                     "query": labeled_sql,
                     "label": label,
                     "execution_time_seconds": execution_time,
-                    "note": "Could not resolve query IDs - profiling data unavailable"
+                    "note": "Could not resolve query IDs - profiling data unavailable",
                 }
 
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT path_line
                 FROM v_internal.dc_explain_plans
                 WHERE transaction_id = %s
                 AND statement_id = %s
                 ORDER BY path_id, path_line_index
-            """, (trxid, stmtid))
+            """,
+                (trxid, stmtid),
+            )
             plan_rows = cursor.fetchall()
-            plan_lines = [r[0] for r in plan_rows] if plan_rows else ["Plan not available"]
+            plan_lines = (
+                [r[0] for r in plan_rows] if plan_rows else ["Plan not available"]
+            )
 
-            result = f"Execution Time: {duration_us or int(execution_time * 1000000)}μs\n"
+            result = (
+                f"Execution Time: {duration_us or int(execution_time * 1000000)}μs\n"
+            )
             result += f"Transaction ID: {trxid}\n"
             result += f"Statement ID: {stmtid}\n\n"
             result += "Execution Plan:\n"
@@ -1463,9 +1581,10 @@ async def profile_query(
         await ctx.error(error_msg)
         raise RuntimeError(error_msg) from e
 
-#--------------------------------------------
-#---------- Database Status ------------------
-#--------------------------------------------
+
+# --------------------------------------------
+# ---------- Database Status ------------------
+# --------------------------------------------
 @mcp.tool()
 async def database_status(ctx: Context) -> dict:
     """Get database status with improved error handling and formatting."""
@@ -1540,7 +1659,9 @@ async def database_status(ctx: Context) -> dict:
                 for date, avg_usage, max_db in trend_data:
                     result += f"- {date}: {avg_usage}% ({max_db} GB)\n"
 
-            cursor.execute("SELECT COUNT(*) FROM v_catalog.nodes WHERE node_state = 'UP'")
+            cursor.execute(
+                "SELECT COUNT(*) FROM v_catalog.nodes WHERE node_state = 'UP'"
+            )
             node_count = cursor.fetchone()[0]
             result += "\nCluster Info:\n"
             result += f"- Active Nodes: {node_count}\n"
@@ -1552,7 +1673,7 @@ async def database_status(ctx: Context) -> dict:
                 "current_db_size_gb": float(current[1]) if current else 0,
                 "license_capacity_gb": float(current[0]) if current else 0,
                 "trend_data_points": len(trend_data),
-                "cluster_nodes": node_count
+                "cluster_nodes": node_count,
             }
         except vertica_python.errors.Error as e:
             raise RuntimeError(f"Database error getting status: {str(e)}") from e
@@ -1569,9 +1690,10 @@ async def database_status(ctx: Context) -> dict:
         await ctx.error(error_msg)
         raise RuntimeError(error_msg) from e
 
-#--------------------------------------------
-#---------- System Performance ------------------
-#--------------------------------------------
+
+# --------------------------------------------
+# ---------- System Performance ------------------
+# --------------------------------------------
 @mcp.tool()
 async def analyze_system_performance(
     ctx: Context,
@@ -1590,13 +1712,17 @@ async def analyze_system_performance(
     # SECURITY: Validate all parameters BEFORE SQL construction to prevent injection
     bucket = bucket.lower()
     if bucket not in {"second", "minute", "hour"}:
-        raise ValueError(f"Invalid bucket value: {bucket}. Must be 'second', 'minute', or 'hour'")
+        raise ValueError(
+            f"Invalid bucket value: {bucket}. Must be 'second', 'minute', or 'hour'"
+        )
 
     # Strict type validation to prevent SQL injection via type coercion
     try:
         window_minutes = int(window_minutes)
         if window_minutes < 1 or window_minutes > 1440:  # Max 24 hours
-            raise ValueError(f"window_minutes must be between 1 and 1440, got {window_minutes}")
+            raise ValueError(
+                f"window_minutes must be between 1 and 1440, got {window_minutes}"
+            )
     except (TypeError, ValueError) as e:
         raise ValueError(f"window_minutes must be a valid integer: {e}")
 
@@ -1608,7 +1734,7 @@ async def analyze_system_performance(
         raise ValueError(f"top_n must be a valid integer: {e}")
 
     def _rows_to_dicts(cols, rows):
-        return [dict(zip(cols, r)) for r in rows]
+        return [dict(zip(cols, r, strict=False)) for r in rows]
 
     def _sync_perf():
         conn = cursor = None
@@ -1624,7 +1750,9 @@ async def analyze_system_performance(
                     pass  # Non-critical
 
             ts_expr = f"DATE_TRUNC('{bucket}', end_time)"
-            where = f"end_time >= CURRENT_TIMESTAMP - INTERVAL '{window_minutes} minutes'"
+            where = (
+                f"end_time >= CURRENT_TIMESTAMP - INTERVAL '{window_minutes} minutes'"
+            )
 
             cpu_sql = f"""
                 SELECT node_name, {ts_expr} AS ts,
@@ -1688,11 +1816,11 @@ async def analyze_system_performance(
         error_msg = f"Performance analysis error: {str(e)}"
         await ctx.error(error_msg)
         raise RuntimeError(error_msg) from e
-            
 
-#--------------------------------------------
-#---------- Generate Health Dashboard ------------------
-#--------------------------------------------
+
+# --------------------------------------------
+# ---------- Generate Health Dashboard ------------------
+# --------------------------------------------
 @mcp.tool()
 async def generate_health_dashboard(
     ctx: Context, output_format: str = "compact"
@@ -1766,9 +1894,9 @@ def _format_detailed_dashboard(status: dict, perf: dict) -> str:
         cpu_avg = _calculate_avg(perf.get("cpu", []), "cpu_pct")
         mem_avg = _calculate_avg(perf.get("memory", []), "mem_pct")
 
-        result = f"Database Health Report\n"
+        result = "Database Health Report\n"
         result += f"Version: {status.get('version', 'Unknown')[:50]}\n\n"
-        result += f"Resources:\n"
+        result += "Resources:\n"
         result += f"- CPU: {cpu_avg:.1f}%\n"
         result += f"- Memory: {mem_avg:.1f}%\n\n"
 
@@ -1793,7 +1921,7 @@ def _format_detailed_dashboard(status: dict, perf: dict) -> str:
         try:
             top_tables = perf.get("top_tables_by_ros", [])
             if top_tables:
-                result += f"\nTop ROS Tables:\n"
+                result += "\nTop ROS Tables:\n"
                 for table in top_tables[:3]:
                     name = table.get("anchor_table_name", "Unknown")
                     ros_count = table.get("total_ros_containers", 0)
@@ -1820,7 +1948,7 @@ def _calculate_avg(data: list, field: str) -> float:
 def _generate_alerts(perf: dict) -> list:
     """Generate performance alerts with better error handling."""
     alerts = []
-    
+
     try:
         # CPU alerts
         cpu_data = perf.get("cpu", [])
@@ -1829,7 +1957,7 @@ def _generate_alerts(perf: dict) -> list:
             if cpu_avg > 85:
                 alerts.append({"type": "cpu_high", "value": f"{cpu_avg:.1f}%"})
 
-        # Memory alerts  
+        # Memory alerts
         mem_data = perf.get("memory", [])
         if mem_data:
             mem_avg = _calculate_avg(mem_data, "mem_pct")
@@ -1841,11 +1969,13 @@ def _generate_alerts(perf: dict) -> list:
         for table in top_tables:
             ros_count = table.get("total_ros_containers", 0)
             if ros_count > 5000:
-                alerts.append({
-                    "type": "ros_high",
-                    "table": table.get("anchor_table_name", "Unknown"),
-                    "value": f"{ros_count:,} containers"
-                })
+                alerts.append(
+                    {
+                        "type": "ros_high",
+                        "table": table.get("anchor_table_name", "Unknown"),
+                        "value": f"{ros_count:,} containers",
+                    }
+                )
 
     except Exception as e:
         alerts.append({"type": "error", "value": f"Alert generation failed: {str(e)}"})
@@ -1853,9 +1983,9 @@ def _generate_alerts(perf: dict) -> list:
     return alerts
 
 
-#--------------------------------------------
-#---------- Health Dashboard Prompt ------------------
-#--------------------------------------------
+# --------------------------------------------
+# ---------- Health Dashboard Prompt ------------------
+# --------------------------------------------
 @mcp.prompt()
 async def vertica_database_health_dashboard() -> str:
     """Compact health dashboard."""
@@ -1864,9 +1994,9 @@ Call: generate_health_dashboard(format="compact")
 Show: Version, usage%, alerts only"""
 
 
-#--------------------------------------------
-#---------- System Monitor Prompt ------------------
-#--------------------------------------------
+# --------------------------------------------
+# ---------- System Monitor Prompt ------------------
+# --------------------------------------------
 @mcp.prompt()
 async def vertica_database_system_monitor() -> str:
     """System performance monitor."""
@@ -1876,10 +2006,9 @@ Show: CPU/Mem avg, top ROS tables
 Alert if >85% usage or >5000 ROS"""
 
 
-
-#--------------------------------------------
-#---------- Compact Health Report Prompt ------------------
-#--------------------------------------------
+# --------------------------------------------
+# ---------- Compact Health Report Prompt ------------------
+# --------------------------------------------
 @mcp.prompt()
 async def vertica_compact_health_report() -> str:
     """Token-efficient health report."""
@@ -1888,9 +2017,10 @@ Call: generate_health_dashboard(format="json")
 Return JSON with summary + alerts only
 Max 300 tokens"""
 
-#--------------------------------------------
-#---------- SQL Safety Guard Prompt ------------------
-#--------------------------------------------
+
+# --------------------------------------------
+# ---------- SQL Safety Guard Prompt ------------------
+# --------------------------------------------
 @mcp.prompt()
 async def sql_query_safety_guard() -> str:
     """SQL safety guard."""
@@ -1900,9 +2030,9 @@ async def sql_query_safety_guard() -> str:
 3. Use pagination for results"""
 
 
-#--------------------------------------------
-#---------- Query Performance Analyzer Prompt ------------------
-#--------------------------------------------
+# --------------------------------------------
+# ---------- Query Performance Analyzer Prompt ------------------
+# --------------------------------------------
 @mcp.prompt()
 async def vertica_query_performance_analyzer() -> str:
     """
@@ -1944,9 +2074,9 @@ RULES:
 - Flag urgent issues: >5000 ROS containers, inefficient operators"""
 
 
-#--------------------------------------------
-#---------- SQL Assistant Prompt ------------------
-#--------------------------------------------
+# --------------------------------------------
+# ---------- SQL Assistant Prompt ------------------
+# --------------------------------------------
 @mcp.prompt()
 async def vertica_sql_assistant() -> str:
     """

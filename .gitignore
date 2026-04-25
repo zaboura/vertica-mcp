@@ -302,3 +302,13 @@ claude_desktop_config.jsonc
 
 # PyPi
 PyPi-instruction.txt
+
+# Claude Code / Agent development files (not for PyPI)
+.agent/
+.agents/
+.claude/
+docs/superpowers/
+
+# graphify output (development only)
+graphify-out/
+graphify-repo-temp/

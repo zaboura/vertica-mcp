@@ -31,7 +31,7 @@ import threading
 from dataclasses import dataclass
 from enum import Enum, auto
 from queue import Queue
-from typing import Any, Dict, Optional
+from typing import Any
 
 import vertica_python
 
@@ -100,7 +100,7 @@ class VerticaConfig:
     allow_delete: bool = False
     allow_ddl: bool = False
     # Schema-specific permissions
-    schema_permissions: Optional[Dict[str, SchemaPermissions]] = None
+    schema_permissions: dict[str, SchemaPermissions] | None = None
 
     def __post_init__(self):
         """Post-initialization to ensure schema_permissions is initialized."""
@@ -182,7 +182,7 @@ class VerticaConnectionPool:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close_all()
 
-    def _get_connection_config(self) -> Dict[str, Any]:
+    def _get_connection_config(self) -> dict[str, Any]:
         """Get connection configuration with SSL and auth settings."""
         config = {
             "host": self.config.host,
@@ -196,7 +196,9 @@ class VerticaConnectionPool:
             config["password"] = self.config.password
         elif self.config.auth_mode == "oauth":
             if not self.config.oauth_token:
-                raise ValueError("oauth_token is required for oauth authentication mode")
+                raise ValueError(
+                    "oauth_token is required for oauth authentication mode"
+                )
             config["oauth_access_token"] = self.config.oauth_token
         elif self.config.auth_mode == "kerberos":
             if self.config.kerberos_service:
@@ -206,19 +208,25 @@ class VerticaConnectionPool:
 
         # SSL Configuration (including mTLS support)
         if self.config.ssl or self.config.auth_mode == "mtls":
-            if self.config.auth_mode == "mtls" and (not self.config.ssl_cert or not self.config.ssl_key):
-                raise ValueError("ssl_cert and ssl_key are required for mtls authentication mode")
+            if self.config.auth_mode == "mtls" and (
+                not self.config.ssl_cert or not self.config.ssl_key
+            ):
+                raise ValueError(
+                    "ssl_cert and ssl_key are required for mtls authentication mode"
+                )
 
             if self.config.ssl_cert and self.config.ssl_key:
                 # mTLS setup
                 context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-                context.load_cert_chain(certfile=self.config.ssl_cert, keyfile=self.config.ssl_key)
+                context.load_cert_chain(
+                    certfile=self.config.ssl_cert, keyfile=self.config.ssl_key
+                )
 
                 # SECURITY: Forbid SSL bypass in production
                 if not self.config.ssl_reject_unauthorized:
                     environment = os.getenv("ENVIRONMENT", "production").lower()
                     if environment in ("production", "prod"):
-                        raise EnvironmentError(
+                        raise OSError(
                             "SECURITY ERROR: Cannot disable SSL certificate verification in production. "
                             "VERTICA_SSL_REJECT_UNAUTHORIZED must be 'true' in production environments. "
                             "Disabling verification enables MITM attacks."
@@ -235,11 +243,11 @@ class VerticaConnectionPool:
                 config["ssl_reject_unauthorized"] = self.config.ssl_reject_unauthorized
         else:
             config["tlsmode"] = "disable"
-            
+
         logger.debug("Connection config: %s", self._get_safe_config(config))
         return config
 
-    def _get_safe_config(self, config: Dict[str, Any]) -> Dict[str, Any]:
+    def _get_safe_config(self, config: dict[str, Any]) -> dict[str, Any]:
         """Create a safe version of the config for logging by masking sensitive data."""
         safe_config = config.copy()
 
@@ -334,8 +342,8 @@ class VerticaConnectionManager:
     """Singleton class to manage Vertica connections."""
 
     def __init__(self):
-        self.pool: Optional[VerticaConnectionPool] = None
-        self.config: Optional[VerticaConfig] = None
+        self.pool: VerticaConnectionPool | None = None
+        self.config: VerticaConfig | None = None
         self.lock = threading.Lock()
         self.is_multi_db_mode: bool = False
 
