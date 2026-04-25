@@ -85,7 +85,7 @@ class VerticaConfig:
     database: str
     user: str
     password: str
-    connection_limit: int = 10
+    connection_limit: int = 50  # Increased from 10 for production workloads
     ssl: bool = False
     ssl_reject_unauthorized: bool = True
     auth_mode: str = "basic"
@@ -286,14 +286,23 @@ class VerticaConnectionPool:
                 return conn
             except Exception:
                 pass
+
+            # SECURITY FIX (P2-5): Increment BEFORE creating to prevent race condition
             # None available: create on demand (lazy path) if under limit
             if self.active_connections >= self.config.connection_limit:
-                raise Exception("No available connections in the pool")
+                raise Exception(
+                    f"Connection pool exhausted ({self.active_connections}/{self.config.connection_limit}). "
+                    f"Increase VERTICA_CONNECTION_LIMIT or wait for connections to be released."
+                )
+
+            # Increment active count BEFORE creating connection (prevents race condition)
+            self.active_connections += 1
             try:
                 conn = vertica_python.connect(**self._get_connection_config())
-                self.active_connections += 1
                 return conn
             except Exception as e:
+                # IMPORTANT: Decrement on failure since we incremented optimistically
+                self.active_connections -= 1
                 logger.error(f"Failed to open Vertica connection: {str(e)}")
                 raise
 

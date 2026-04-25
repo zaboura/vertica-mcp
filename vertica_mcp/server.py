@@ -112,6 +112,11 @@ RETRY_DELAY_BASE = float(os.getenv("VERTICA_RETRY_DELAY", "1.0"))
 CACHE_TTL_SECONDS = int(os.getenv("VERTICA_CACHE_TTL", "300"))  # 5 minutes
 MAX_RESULT_SIZE_MB = int(os.getenv("VERTICA_MAX_RESULT_MB", "100"))
 RATE_LIMIT_PER_MINUTE = int(os.getenv("VERTICA_RATE_LIMIT", "60"))
+
+# Query execution constants (previously magic numbers)
+DEFAULT_ROW_LIMIT = 1000  # Auto-applied LIMIT for queries without one
+PREVIEW_ROW_COUNT = 50  # Number of rows shown in preview
+MAX_PAGINATION_ROWS = 100  # Maximum rows per page in pagination
 CONNECTION_HEALTH_CHECK_INTERVAL = int(os.getenv("VERTICA_HEALTH_CHECK_INTERVAL", "60"))
 
 # Cache for metadata queries
@@ -345,29 +350,31 @@ async def run_stdio() -> None:
 async def server_lifespan(_server: FastMCP) -> AsyncIterator[dict[str, Any]]:
     """Server lifespan context manager with improved error handling."""
 
-    # Load environment with multiple fallback methods
+    # SECURITY FIX (P2-3): Use absolute paths to prevent directory traversal
+    # Load environment with secure fallback methods
     env_loaded = False
-    env_methods = [
-        lambda: find_dotenv(usecwd=True),
-        lambda: os.path.join(os.getcwd(), ".env"),
-        lambda: os.path.join(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"
-        ),
-    ]
 
-    for method in env_methods:
+    # Method 1: Explicit path from module location (most secure)
+    module_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    env_path = os.path.abspath(os.path.join(module_dir, ".env"))
+
+    if os.path.exists(env_path):
+        load_dotenv(env_path, override=False)
+        logger.info(f"Loaded environment from {env_path}")
+        env_loaded = True
+    else:
+        # Method 2: Try find_dotenv (walks up directory tree safely)
         try:
-            env_path = method()
-            if env_path and os.path.exists(env_path):
-                load_dotenv(env_path, override=False)
-                logger.info(f"Loaded environment from {env_path}")
+            found_env = find_dotenv(usecwd=True)
+            if found_env and os.path.exists(found_env):
+                load_dotenv(found_env, override=False)
+                logger.info(f"Loaded environment from {found_env}")
                 env_loaded = True
-                break
         except Exception as e:
-            logger.debug(f"Environment loading attempt failed: {e}")
+            logger.debug(f"find_dotenv failed: {e}")
 
     if not env_loaded:
-        load_dotenv()  # Try default
+        load_dotenv()  # Try default (uses os.environ)
         logger.warning("Using system environment variables or defaults")
 
     # --- Startup configuration validation (fail-fast for critical settings) ---
@@ -669,15 +676,25 @@ async def run_query_safely(
     """
     await ctx.info("run_query_safely called")
 
-    # Rate limiting check
+    # SECURITY FIX (P2-1): Rate limiting requires authenticated client_id
+    # Prevent bypass by sharing "default" bucket across all unauthenticated users
     client_id = (
         getattr(ctx.request_context, "client_id", None)
         or getattr(ctx.request_context, "connection_id", None)
-        or "default"
     )
 
+    if not client_id:
+        raise RuntimeError(
+            "Rate limiting requires authenticated access. "
+            "Configure JWT or API key authentication to use query tools."
+        )
+
     if not _check_rate_limit(client_id):
-        raise RuntimeError("Rate limit exceeded. Please wait before retrying.")
+        raise RuntimeError(
+            f"Rate limit exceeded for client {client_id[:8]}... "
+            f"Maximum {os.getenv('VERTICA_RATE_LIMIT', '60')} requests per minute. "
+            "Please wait before retrying."
+        )
 
     # Sanitize query
     try:
