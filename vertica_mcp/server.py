@@ -512,10 +512,25 @@ async def run_sse(host: str = "localhost", port: int = 8000) -> None:
     # Add auth middleware
     sse_app.add_middleware(AuthMiddleware)
 
-    cors_origins = [
-        o.strip() for o in os.getenv("MCP_CORS_ORIGINS", "*").split(",") if o.strip()
-    ]
-    
+    # SECURITY: CORS configuration with credential safety validation
+    cors_origins_str = os.getenv("MCP_CORS_ORIGINS", "")
+    if not cors_origins_str:
+        logger.warning(
+            "MCP_CORS_ORIGINS not set. CORS will block all cross-origin requests. "
+            "Set explicit origins for production (e.g., 'https://app.example.com,https://admin.example.com')"
+        )
+        cors_origins = []
+    else:
+        cors_origins = [o.strip() for o in cors_origins_str.split(",") if o.strip()]
+
+        # CRITICAL SECURITY CHECK: Forbid wildcard with credentials
+        if "*" in cors_origins:
+            raise EnvironmentError(
+                "SECURITY ERROR: Cannot use CORS wildcard (*) with allow_credentials=True. "
+                "This combination allows any website to steal user credentials. "
+                "Set MCP_CORS_ORIGINS to explicit domain list: 'https://app1.com,https://app2.com'"
+            )
+
     # Add CORS middleware
     sse_app.add_middleware(
         CORSMiddleware,
@@ -571,14 +586,29 @@ async def run_http(
     _print_banner("Streamable HTTP", f"http://{host}:{port}{path}")
 
     app = mcp.streamable_http_app()
-    
+
     # Add auth middleware
     app.add_middleware(AuthMiddleware)
 
-    cors_origins = [
-        o.strip() for o in os.getenv("MCP_CORS_ORIGINS", "*").split(",") if o.strip()
-    ]
-    
+    # SECURITY: CORS configuration with credential safety validation
+    cors_origins_str = os.getenv("MCP_CORS_ORIGINS", "")
+    if not cors_origins_str:
+        logger.warning(
+            "MCP_CORS_ORIGINS not set. CORS will block all cross-origin requests. "
+            "Set explicit origins for production (e.g., 'https://app.example.com,https://admin.example.com')"
+        )
+        cors_origins = []
+    else:
+        cors_origins = [o.strip() for o in cors_origins_str.split(",") if o.strip()]
+
+        # CRITICAL SECURITY CHECK: Forbid wildcard with credentials
+        if "*" in cors_origins:
+            raise EnvironmentError(
+                "SECURITY ERROR: Cannot use CORS wildcard (*) with allow_credentials=True. "
+                "This combination allows any website to steal user credentials. "
+                "Set MCP_CORS_ORIGINS to explicit domain list: 'https://app1.com,https://app2.com'"
+            )
+
     # Add CORS middleware
     app.add_middleware(
         CORSMiddleware,

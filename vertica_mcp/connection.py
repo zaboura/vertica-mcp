@@ -213,7 +213,20 @@ class VerticaConnectionPool:
                 # mTLS setup
                 context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
                 context.load_cert_chain(certfile=self.config.ssl_cert, keyfile=self.config.ssl_key)
+
+                # SECURITY: Forbid SSL bypass in production
                 if not self.config.ssl_reject_unauthorized:
+                    environment = os.getenv("ENVIRONMENT", "production").lower()
+                    if environment in ("production", "prod"):
+                        raise EnvironmentError(
+                            "SECURITY ERROR: Cannot disable SSL certificate verification in production. "
+                            "VERTICA_SSL_REJECT_UNAUTHORIZED must be 'true' in production environments. "
+                            "Disabling verification enables MITM attacks."
+                        )
+                    logger.warning(
+                        "SSL CERTIFICATE VERIFICATION DISABLED - ONLY FOR DEVELOPMENT! "
+                        "This creates a security vulnerability in production."
+                    )
                     context.check_hostname = False
                     context.verify_mode = ssl.CERT_NONE
                 config["ssl"] = context
@@ -229,10 +242,20 @@ class VerticaConnectionPool:
     def _get_safe_config(self, config: Dict[str, Any]) -> Dict[str, Any]:
         """Create a safe version of the config for logging by masking sensitive data."""
         safe_config = config.copy()
-        if "password" in safe_config:
-            safe_config["password"] = "********"
-        if "oauth_access_token" in safe_config:
-            safe_config["oauth_access_token"] = "********"
+
+        # SECURITY: Mask all sensitive credential and certificate data
+        sensitive_keys = [
+            "password",
+            "oauth_access_token",
+            "ssl_key",  # Private key paths should not be logged
+            "ssl_cert",  # Certificate paths may reveal infrastructure
+            "kerberos_service_name",  # Can be used for reconnaissance
+        ]
+
+        for key in sensitive_keys:
+            if key in safe_config:
+                safe_config[key] = "********"
+
         return safe_config
 
     def _initialize_pool(self):
