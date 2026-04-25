@@ -45,6 +45,7 @@ from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 from starlette.requests import Request
+import vertica_python
 
 from vertica_mcp.connection import (OperationType, VerticaConfig,
                                     VerticaConnectionManager)
@@ -77,7 +78,6 @@ class AuthMiddleware(BaseHTTPMiddleware):
         try:
             jwks_client = PyJWKClient(f"{issuer.rstrip('/')}/.well-known/jwks.json")
             signing_key = jwks_client.get_signing_key_from_jwt(token)
-            
             jwt.decode(
                 token,
                 signing_key.key,
@@ -85,9 +85,17 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 audience=audience,
                 issuer=issuer
             )
+        except jwt.ExpiredSignatureError:
+            logging.getLogger("vertica-mcp").warning("JWT token has expired")
+            return JSONResponse({"error": "Unauthorized: Token has expired"}, status_code=401)
+        except jwt.InvalidTokenError as e:
+            # SECURITY: Log details server-side but return generic message to prevent information disclosure
+            logging.getLogger("vertica-mcp").warning(f"JWT validation failed: {type(e).__name__} - {str(e)}")
+            return JSONResponse({"error": "Unauthorized: Invalid token"}, status_code=401)
         except Exception as e:
-            logging.getLogger("vertica-mcp").error(f"JWT Validation failed: {e}")
-            return JSONResponse({"error": f"Unauthorized: {str(e)}"}, status_code=401)
+            # SECURITY: Generic error message to prevent leaking JWT configuration details
+            logging.getLogger("vertica-mcp").error(f"Unexpected JWT error: {type(e).__name__} - {str(e)}")
+            return JSONResponse({"error": "Unauthorized: Authentication error"}, status_code=401)
 
         return await call_next(request)
 
@@ -134,22 +142,49 @@ def _wrap_subquery(sql: str) -> str:
 
 
 def _sanitize_query(query: str) -> str:
-    """Basic SQL injection prevention."""
-    # Check for common injection patterns
+    """
+    Enhanced SQL injection prevention with whitelist validation.
+
+    SECURITY STRATEGY:
+    1. Whitelist-based: Only allow safe read-only operations
+    2. Blacklist dangerous patterns as defense-in-depth
+    3. Detect common injection techniques
+    """
+    if not query or not isinstance(query, str):
+        raise ValueError("Query must be a non-empty string")
+
+    query_trimmed = query.strip()
+    query_upper = query_trimmed.upper()
+
+    # WHITELIST: Only allow read-only operations
+    allowed_statements = ("SELECT", "WITH", "EXPLAIN", "SHOW", "DESCRIBE", "DESC")
+    if not query_upper.startswith(allowed_statements):
+        raise ValueError(
+            f"Only read-only queries are allowed (SELECT, WITH, EXPLAIN, SHOW, DESCRIBE). "
+            f"Query starts with: {query_trimmed[:50]}"
+        )
+
+    # BLACKLIST: Comprehensive dangerous pattern detection (defense-in-depth)
     dangerous_patterns = [
-        r";\s*DROP\s+",
-        r";\s*DELETE\s+",
-        r";\s*UPDATE\s+",
-        r";\s*INSERT\s+",
-        r";\s*ALTER\s+",
-        r";\s*CREATE\s+",
-        r"xp_cmdshell",
-        r"sp_executesql",
+        (r";\s*(DROP|DELETE|UPDATE|INSERT|ALTER|CREATE|TRUNCATE|GRANT|REVOKE)\s+", "SQL command injection"),
+        (r"(xp_cmdshell|sp_executesql|exec\s*\()", "Command execution attempt"),
+        (r"(EXPORT_OBJECTS|COPY\s+.*\s+TO)", "Vertica-specific data exfiltration"),
+        (r"--[^\n]*\bOR\b", "Comment-based SQL injection"),
+        (r"/\*.*\bOR\b.*\*/", "Block comment injection"),
+        (r"\bUNION\s+ALL\s+SELECT", "UNION-based injection"),
+        (r"\bOR\s+['\"]?\d+['\"]?\s*=\s*['\"]?\d+", "Boolean-based injection (OR 1=1)"),
+        (r"\bAND\s+['\"]?\d+['\"]?\s*=\s*['\"]?\d+", "Boolean-based injection (AND 1=1)"),
+        (r"';.*--", "SQL termination with comment"),
+        (r"\b(SLEEP|WAITFOR|BENCHMARK|PG_SLEEP)\s*\(", "Time-based blind injection"),
     ]
 
-    for pattern in dangerous_patterns:
+    for pattern, description in dangerous_patterns:
         if re.search(pattern, query, re.IGNORECASE):
-            raise ValueError(f"Potentially dangerous SQL pattern detected: {pattern}")
+            raise ValueError(f"Security violation: {description} detected in query")
+
+    # Check for excessive length (potential DoS)
+    if len(query) > 50000:  # 50KB max
+        raise ValueError(f"Query too long ({len(query)} chars). Maximum 50,000 characters allowed.")
 
     return query
 
@@ -199,6 +234,48 @@ async def _validate_connection(conn) -> bool:
         return True
     except Exception:
         return False
+
+async def _execute_query_async(manager: VerticaConnectionManager, query: str, params: Any = None, fetch: str = "all", timeout: int = 30, commit: bool = False, max_rows: int = 1000) -> Any:
+    """Safely execute a query in a background thread without blocking the async event loop."""
+
+    # SECURITY: Validate timeout is an integer to prevent SQL injection
+    try:
+        timeout = int(timeout)
+        if timeout < 1 or timeout > 3600:  # 1 second to 1 hour max
+            raise ValueError(f"timeout must be between 1 and 3600 seconds, got {timeout}")
+    except (TypeError, ValueError) as e:
+        raise ValueError(f"Invalid timeout parameter: {e}")
+
+    def _sync_execute():
+        conn = manager.get_connection()
+        try:
+            cursor = conn.cursor()
+            # Safe: timeout is now guaranteed to be an integer after validation above
+            cursor.execute(f"SET SESSION RUNTIMECAP '{timeout}s'")
+            if params:
+                cursor.execute(query, params)
+            else:
+                cursor.execute(query)
+            
+            result = None
+            if fetch == "all":
+                result = cursor.fetchall(), [col.name for col in cursor.description] if cursor.description else []
+            elif fetch == "many":
+                result = cursor.fetchmany(max_rows), [col.name for col in cursor.description] if cursor.description else []
+            elif fetch == "none":
+                result = getattr(cursor, "rowcount", None), []
+            
+            if commit:
+                conn.commit()
+                
+            return result
+        except vertica_python.errors.Error as e:
+            logger.error(f"Database error executing query: {e}")
+            raise
+        finally:
+            manager.release_connection(conn)
+            
+    return await asyncio.to_thread(_sync_execute)
 
 
 def extract_operation_type(query: str) -> OperationType | None:
@@ -292,6 +369,31 @@ async def server_lifespan(_server: FastMCP) -> AsyncIterator[dict[str, Any]]:
     if not env_loaded:
         load_dotenv()  # Try default
         logger.warning("Using system environment variables or defaults")
+
+    # --- Startup configuration validation (fail-fast for critical settings) ---
+    jwt_issuer = os.getenv("JWT_ISSUER")
+    jwt_audience = os.getenv("JWT_AUDIENCE")
+    if jwt_issuer or jwt_audience:
+        # Both must be set if either is present
+        if not jwt_issuer:
+            raise EnvironmentError("JWT_AUDIENCE is set but JWT_ISSUER is missing. Both must be configured together.")
+        if not jwt_audience:
+            raise EnvironmentError("JWT_ISSUER is set but JWT_AUDIENCE is missing. Both must be configured together.")
+        # Validate issuer looks like a URL
+        if not jwt_issuer.startswith(("http://", "https://")):
+            raise EnvironmentError(f"JWT_ISSUER must be a valid HTTP/HTTPS URL, got: {jwt_issuer!r}")
+        logger.info(f"JWT authentication enabled: issuer={jwt_issuer}, audience={jwt_audience}")
+    else:
+        api_key = os.getenv("MCP_API_KEY")
+        if api_key:
+            logger.info("API key authentication enabled (JWT not configured)")
+        else:
+            # CRITICAL SECURITY: Refuse to start without authentication in production
+            raise EnvironmentError(
+                "SECURITY ERROR: No authentication configured. Server cannot start without authentication. "
+                "Set JWT_ISSUER + JWT_AUDIENCE for JWT auth, or MCP_API_KEY for API key auth. "
+                "This check prevents accidental deployment of an unauthenticated server."
+            )
 
     manager = None
     retry_count = 0
@@ -569,48 +671,33 @@ async def run_query_safely(
     # Set timeout
     query_timeout = timeout or QUERY_TIMEOUT
 
+    # Auto-enforce LIMIT 1000 on unpaginated SELECT queries that have no LIMIT clause
+    if _is_select(query) and not proceed:
+        stripped_upper = _strip_sql_comments(query).upper()
+        if not re.search(r"\bLIMIT\s+\d", stripped_upper):
+            query = f"{_wrap_subquery(query)} LIMIT 1000"
+            await ctx.info("Auto-applied LIMIT 1000 to unbounded SELECT query")
+
     # Non-SELECT execution
     if not _is_select(query):
-        conn = cursor = None
         try:
-            conn = manager.get_connection()
-
-            # Validate connection before use
-            if not await _validate_connection(conn):
-                manager.release_connection(conn)
-                conn = manager.get_connection()  # Get fresh connection
-
-            cursor = conn.cursor()
-
-            # Set query timeout
-            cursor.execute(f"SET SESSION RUNTIMECAP '{query_timeout}s'")
-
-            # Execute with timeout
-            cursor.execute(query)
-            affected = getattr(cursor, "rowcount", None)
-
-            # Commit for DML operations
-            if operation in [
+            commit_needed = operation in [
                 OperationType.INSERT,
                 OperationType.UPDATE,
                 OperationType.DELETE,
-            ]:
-                conn.commit()
-
+            ]
+            affected, _ = await _execute_query_async(
+                manager, query, fetch="none", timeout=query_timeout, commit=commit_needed
+            )
             await ctx.info(f"Non-SELECT executed, affected_rows={affected}")
             return {"ok": True, "affected_rows": affected}
-
-        except Exception as e:
-            if conn and operation:
-                conn.rollback()  # Rollback on error
-            msg = f"Error executing statement: {e}"
+        except vertica_python.errors.Error as e:
+            msg = f"Database error executing statement: {e}"
             await ctx.error(msg)
             raise RuntimeError(msg) from e
-        finally:
-            if cursor:
-                cursor.close()
-            if conn:
-                manager.release_connection(conn)
+        except Exception as e:
+            logger.exception("Unexpected error executing non-select query")
+            raise RuntimeError(f"Unexpected error: {e}") from e
 
     # SELECT query handling
     if not proceed:
@@ -618,24 +705,10 @@ async def run_query_safely(
         probe_limit = row_threshold + 1
         probe_sql = f"{_wrap_subquery(query)} LIMIT {probe_limit}"
 
-        conn = cursor = None
         try:
-            conn = manager.get_connection()
-
-            if not await _validate_connection(conn):
-                manager.release_connection(conn)
-                conn = manager.get_connection()
-
-            cursor = conn.cursor()
-            cursor.execute(f"SET SESSION RUNTIMECAP '{query_timeout}s'")
-            cursor.execute(probe_sql)
-
-            rows = cursor.fetchall()
-            cols = (
-                [d[0] for d in cursor.description]
-                if include_columns and cursor.description
-                else None
-            )
+            rows, cols = await _execute_query_async(manager, probe_sql, timeout=query_timeout)
+            if not include_columns:
+                cols = None
 
             is_large = len(rows) > row_threshold
             preview = rows[: min(50, len(rows))]
@@ -643,8 +716,8 @@ async def run_query_safely(
             exact_count = None
             if is_large and precount:
                 await ctx.info("Computing exact COUNT(*)")
-                cursor.execute(f"SELECT COUNT(*) FROM ({query}) q")
-                exact_count = int(cursor.fetchone()[0])
+                count_rows, _ = await _execute_query_async(manager, f"SELECT COUNT(*) FROM ({query}) q", timeout=query_timeout)
+                exact_count = int(count_rows[0][0]) if count_rows else 0
 
             if not is_large:
                 await ctx.info(f"Small result (<= {row_threshold})")
@@ -687,15 +760,13 @@ async def run_query_safely(
                 },
             }
 
-        except Exception as e:
-            msg = f"Error probing query: {e}"
+        except vertica_python.errors.Error as e:
+            msg = f"Database error probing query: {e}"
             await ctx.error(msg)
             raise RuntimeError(msg) from e
-        finally:
-            if cursor:
-                cursor.close()
-            if conn:
-                manager.release_connection(conn)
+        except Exception as e:
+            logger.exception("Unexpected error probing query")
+            raise RuntimeError(f"Unexpected error: {e}") from e
 
     # Proceed with large result
     await ctx.info(f"Proceeding with mode={mode}")
@@ -747,24 +818,10 @@ async def execute_query_paginated(
     paged_sql = f"{_wrap_subquery(query)} LIMIT {int(limit)} OFFSET {int(offset)}"
     query_timeout = timeout or QUERY_TIMEOUT
 
-    conn = cursor = None
     try:
-        conn = manager.get_connection()
-
-        if not await _validate_connection(conn):
-            manager.release_connection(conn)
-            conn = manager.get_connection()
-
-        cursor = conn.cursor()
-        cursor.execute(f"SET SESSION RUNTIMECAP '{query_timeout}s'")
-        cursor.execute(paged_sql)
-
-        rows = cursor.fetchall()
-        cols = (
-            [d[0] for d in cursor.description]
-            if include_columns and cursor.description
-            else None
-        )
+        rows, cols = await _execute_query_async(manager, paged_sql, timeout=query_timeout)
+        if not include_columns:
+            cols = None
 
         # Check result size
         import sys
@@ -784,15 +841,13 @@ async def execute_query_paginated(
             "columns": cols,
         }
 
-    except Exception as e:
-        msg = f"Paginated query error: {str(e)}"
+    except vertica_python.errors.Error as e:
+        msg = f"Database error in paginated query: {str(e)}"
         await ctx.error(msg)
         raise RuntimeError(msg) from e
-    finally:
-        if cursor:
-            cursor.close()
-        if conn:
-            manager.release_connection(conn)
+    except Exception as e:
+        logger.exception("Unexpected error in paginated query")
+        raise RuntimeError(f"Unexpected error: {str(e)}") from e
 
 #--------------------------------------------
 #---------- Execute Query Stream ------------------
@@ -818,65 +873,60 @@ async def execute_query_stream(
         raise RuntimeError(f"Operation {operation.name} not allowed")
 
     query_timeout = timeout or QUERY_TIMEOUT
-    conn = cursor = None
 
-    try:
-        conn = manager.get_connection()
-
-        if not await _validate_connection(conn):
-            manager.release_connection(conn)
+    def _sync_stream():
+        conn = cursor = None
+        try:
             conn = manager.get_connection()
+            cursor = conn.cursor()
+            cursor.execute(f"SET SESSION RUNTIMECAP '{query_timeout}s'")
+            cursor.execute(query)
 
-        cursor = conn.cursor()
-        cursor.execute(f"SET SESSION RUNTIMECAP '{query_timeout}s'")
-        cursor.execute(query)
-
-        all_results = []
-        total_rows = 0
-        total_size_mb = 0
-
-        while True:
-            batch = cursor.fetchmany(batch_size)
-            if not batch:
-                break
-
-            # Check size limits
+            all_results = []
+            total_rows = 0
+            total_size_mb = 0
             import sys
 
-            batch_size_mb = sys.getsizeof(batch) / (1024 * 1024)
-            total_size_mb += batch_size_mb
+            while True:
+                batch = cursor.fetchmany(batch_size)
+                if not batch:
+                    break
 
-            if total_size_mb > MAX_RESULT_SIZE_MB:
-                await ctx.warning(f"Result size limit reached ({MAX_RESULT_SIZE_MB}MB)")
-                break
+                batch_size_mb = sys.getsizeof(batch) / (1024 * 1024)
+                total_size_mb += batch_size_mb
 
-            total_rows += len(batch)
-            all_results.extend(batch)
+                if total_size_mb > MAX_RESULT_SIZE_MB:
+                    break
 
-            await ctx.debug(f"Fetched {total_rows} rows ({total_size_mb:.2f}MB)")
+                total_rows += len(batch)
+                all_results.extend(batch)
 
-            if total_rows >= max_rows:
-                await ctx.warning(f"Row limit reached ({max_rows})")
-                break
+                if total_rows >= max_rows:
+                    break
 
-        await ctx.info(f"Stream complete: {total_rows} rows, {total_size_mb:.2f}MB")
+            return {
+                "result": all_results,
+                "total_rows": total_rows,
+                "truncated": total_rows >= max_rows or total_size_mb >= MAX_RESULT_SIZE_MB,
+                "size_mb": round(total_size_mb, 2),
+            }
 
-        return {
-            "result": all_results,
-            "total_rows": total_rows,
-            "truncated": total_rows >= max_rows or total_size_mb >= MAX_RESULT_SIZE_MB,
-            "size_mb": round(total_size_mb, 2),
-        }
+        except vertica_python.errors.Error as e:
+            raise RuntimeError(f"Database stream error: {str(e)}") from e
+        except Exception as e:
+            raise RuntimeError(f"Unexpected stream error: {str(e)}") from e
+        finally:
+            if cursor:
+                cursor.close()
+            if conn:
+                manager.release_connection(conn)
 
+    try:
+        return await asyncio.to_thread(_sync_stream)
     except Exception as e:
         error_msg = f"Stream error: {str(e)}"
         await ctx.error(error_msg)
         raise RuntimeError(error_msg) from e
-    finally:
-        if cursor:
-            cursor.close()
-        if conn:
-            manager.release_connection(conn)
 
 
 #--------------------------------------------
@@ -907,26 +957,18 @@ async def get_table_structure(
     ORDER BY ordinal_position;
     """
 
-    conn = cursor = None
+    constraint_query = """
+            SELECT constraint_name, constraint_type, column_name
+            FROM v_catalog.constraint_columns
+            WHERE table_schema = %s AND table_name = %s;
+        """
     try:
-        conn = manager.get_connection()
-        cursor = conn.cursor()
-        cursor.execute(query, (schema_name, table_name))
-        columns = cursor.fetchall()
+        columns, _ = await _execute_query_async(manager, query, (schema_name, table_name))
 
         if not columns:
             raise RuntimeError(f"Table not found: {schema_name}.{table_name}")
 
-        # Get constraints
-        cursor.execute(
-            """
-            SELECT constraint_name, constraint_type, column_name
-            FROM v_catalog.constraint_columns
-            WHERE table_schema = %s AND table_name = %s;
-        """,
-            (schema_name, table_name),
-        )
-        constraints = cursor.fetchall()
+        constraints, _ = await _execute_query_async(manager, constraint_query, (schema_name, table_name))
 
         # Format result
         result = f"Table: {schema_name}.{table_name}\n\nColumns:\n"
@@ -957,15 +999,14 @@ async def get_table_structure(
         _set_cached_metadata(cache_key, response)
         return response
 
+    except vertica_python.errors.Error as e:
+        error_msg = f"Database error getting table structure: {str(e)}"
+        await ctx.error(error_msg)
+        raise RuntimeError(error_msg) from e
     except Exception as e:
         error_msg = f"Error getting table structure: {str(e)}"
         await ctx.error(error_msg)
         raise RuntimeError(error_msg) from e
-    finally:
-        if cursor:
-            cursor.close()
-        if conn:
-            manager.release_connection(conn)
 
 
 @mcp.tool()
@@ -986,12 +1027,8 @@ async def get_table_projections(
     ORDER BY projection_name;
     """
 
-    conn = cursor = None
     try:
-        conn = manager.get_connection()
-        cursor = conn.cursor()
-        cursor.execute(query, (schema_name, table_name))
-        projections = cursor.fetchall()
+        projections, _ = await _execute_query_async(manager, query, (schema_name, table_name))
 
         if not projections:
             raise RuntimeError(f"No projections found for {schema_name}.{table_name}")
@@ -1007,15 +1044,14 @@ async def get_table_projections(
             "projection_count": len(projections),
         }
 
+    except vertica_python.errors.Error as e:
+        error_msg = f"Database error listing projections: {str(e)}"
+        await ctx.error(error_msg)
+        raise RuntimeError(error_msg) from e
     except Exception as e:
         error_msg = f"Error listing projections: {str(e)}"
         await ctx.error(error_msg)
         raise RuntimeError(error_msg) from e
-    finally:
-        if cursor:
-            cursor.close()
-        if conn:
-            manager.release_connection(conn)
 
 
 #--------------------------------------------
@@ -1042,12 +1078,8 @@ async def get_schema_views(ctx: Context, schema_name: str = "public") -> dict:
     ORDER BY table_name;
     """
 
-    conn = cursor = None
     try:
-        conn = manager.get_connection()
-        cursor = conn.cursor()
-        cursor.execute(query, (schema_name,))
-        views = cursor.fetchall()
+        views, _ = await _execute_query_async(manager, query, (schema_name,))
 
         if not views:
             raise RuntimeError(f"No views found in schema: {schema_name}")
@@ -1060,15 +1092,14 @@ async def get_schema_views(ctx: Context, schema_name: str = "public") -> dict:
         _set_cached_metadata(cache_key, response)
         return response
 
+    except vertica_python.errors.Error as e:
+        error_msg = f"Database error listing views: {str(e)}"
+        await ctx.error(error_msg)
+        raise RuntimeError(error_msg) from e
     except Exception as e:
         error_msg = f"Error listing views: {str(e)}"
         await ctx.error(error_msg)
         raise RuntimeError(error_msg) from e
-    finally:
-        if cursor:
-            cursor.close()
-        if conn:
-            manager.release_connection(conn)
 
 
 #--------------------------------------------
@@ -1095,12 +1126,8 @@ async def get_schema_tables(ctx: Context, schema_name: str = "public") -> dict:
     ORDER BY table_name;
     """
 
-    conn = cursor = None
     try:
-        conn = manager.get_connection()
-        cursor = conn.cursor()
-        cursor.execute(query, (schema_name,))
-        tables = cursor.fetchall()
+        tables, _ = await _execute_query_async(manager, query, (schema_name,))
 
         if not tables:
             raise RuntimeError(f"No tables found in schema: {schema_name}")
@@ -1113,15 +1140,14 @@ async def get_schema_tables(ctx: Context, schema_name: str = "public") -> dict:
         _set_cached_metadata(cache_key, response)
         return response
 
+    except vertica_python.errors.Error as e:
+        error_msg = f"Database error listing tables: {str(e)}"
+        await ctx.error(error_msg)
+        raise RuntimeError(error_msg) from e
     except Exception as e:
         error_msg = f"Error listing tables: {str(e)}"
         await ctx.error(error_msg)
         raise RuntimeError(error_msg) from e
-    finally:
-        if cursor:
-            cursor.close()
-        if conn:
-            manager.release_connection(conn)
 
 #--------------------------------------------
 #---------- Get Database Schemas ------------------
@@ -1146,12 +1172,8 @@ async def get_database_schemas(ctx: Context) -> dict:
     ORDER BY schema_name;
     """
 
-    conn = cursor = None
     try:
-        conn = manager.get_connection()
-        cursor = conn.cursor()
-        cursor.execute(query)
-        schemas = cursor.fetchall()
+        schemas, _ = await _execute_query_async(manager, query)
 
         if not schemas:
             raise RuntimeError("No schemas found")
@@ -1164,15 +1186,14 @@ async def get_database_schemas(ctx: Context) -> dict:
         _set_cached_metadata(cache_key, response)
         return response
 
+    except vertica_python.errors.Error as e:
+        error_msg = f"Database error listing schemas: {str(e)}"
+        await ctx.error(error_msg)
+        raise RuntimeError(error_msg) from e
     except Exception as e:
         error_msg = f"Error listing schemas: {str(e)}"
         await ctx.error(error_msg)
         raise RuntimeError(error_msg) from e
-    finally:
-        if cursor:
-            cursor.close()
-        if conn:
-            manager.release_connection(conn)
 
 #--------------------------------------------
 #---------- Profile Query ------------------
@@ -1287,120 +1308,113 @@ async def profile_query(
     if not manager:
         raise RuntimeError("No database connection manager available")
 
-    conn = cursor = None
     label = f"mcp_profile_{uuid.uuid4().hex[:12]}"
     query_timeout = timeout or QUERY_TIMEOUT
 
-    try:
-        conn = manager.get_connection()
-        cursor = conn.cursor()
-        cursor.execute(f"SET SESSION RUNTIMECAP '{query_timeout}s'")
+    def _sync_profile():
+        conn = cursor = None
+        try:
+            conn = manager.get_connection()
+            cursor = conn.cursor()
+            cursor.execute(f"SET SESSION RUNTIMECAP '{query_timeout}s'")
 
-        labeled_sql = _inject_label(query, label)
-        await ctx.debug(f"Executing with label: {label}")
+            labeled_sql = _inject_label(query, label)
 
-        # Execute with PROFILE
-        start_time = time.time()
-        cursor.execute(f"PROFILE {labeled_sql}")
-        execution_time = time.time() - start_time
+            # Execute with PROFILE
+            start_time = time.time()
+            cursor.execute(f"PROFILE {labeled_sql}")
+            execution_time = time.time() - start_time
 
-        # Wait a moment for monitoring data to be recorded
-        await asyncio.sleep(1)
+            import time as _time
+            _time.sleep(1)  # Wait for monitoring data to be recorded
 
-        # Try multiple resolution strategies
-        trxid = stmtid = duration_us = None
-        
-        # Strategy 1: query_profiles table
-        cursor.execute("""
-            SELECT transaction_id, statement_id, query_duration_us
-            FROM v_monitor.query_profiles
-            WHERE identifier = %s
-            ORDER BY query_start_epoch DESC
-            LIMIT 1
-        """, (label,))
-        
-        row = cursor.fetchone()
-        if row:
-            trxid, stmtid, duration_us = row
-            await ctx.info(f"Found in query_profiles: {trxid}-{stmtid}")
-        else:
-            # Strategy 2: query_requests table
-            cursor.execute("""
-                SELECT transaction_id, statement_id, request_duration_ms
-                FROM v_monitor.query_requests
-                WHERE request_label = %s
-                ORDER BY start_timestamp DESC
-                LIMIT 1
-            """, (label,))
-            
-            row = cursor.fetchone()
-            if row:
-                trxid, stmtid, duration_ms = row
-                duration_us = int(duration_ms) * 1000 if duration_ms else None
-                await ctx.info(f"Found in query_requests: {trxid}-{stmtid}")
-
-        if not trxid:
-            # Strategy 3: Look for recent queries without label
+            # Strategy 1: query_profiles table
+            trxid = stmtid = duration_us = None
             cursor.execute("""
                 SELECT transaction_id, statement_id, query_duration_us
                 FROM v_monitor.query_profiles
-                WHERE query_start_epoch > %s
+                WHERE identifier = %s
                 ORDER BY query_start_epoch DESC
-                LIMIT 5
-            """, (start_time - 5,))  # 5 seconds before execution
-            
-            recent_queries = cursor.fetchall()
-            if recent_queries:
-                trxid, stmtid, duration_us = recent_queries[0]
-                await ctx.warning(f"Using recent query (no label match): {trxid}-{stmtid}")
+                LIMIT 1
+            """, (label,))
+            row = cursor.fetchone()
+            if row:
+                trxid, stmtid, duration_us = row
+            else:
+                # Strategy 2: query_requests table
+                cursor.execute("""
+                    SELECT transaction_id, statement_id, request_duration_ms
+                    FROM v_monitor.query_requests
+                    WHERE request_label = %s
+                    ORDER BY start_timestamp DESC
+                    LIMIT 1
+                """, (label,))
+                row = cursor.fetchone()
+                if row:
+                    trxid, stmtid, duration_ms = row
+                    duration_us = int(duration_ms) * 1000 if duration_ms else None
 
-        if not trxid:
-            # Fallback: return basic execution info
+            if not trxid:
+                # Strategy 3: Look for recent queries
+                cursor.execute("""
+                    SELECT transaction_id, statement_id, query_duration_us
+                    FROM v_monitor.query_profiles
+                    WHERE query_start_epoch > %s
+                    ORDER BY query_start_epoch DESC
+                    LIMIT 5
+                """, (start_time - 5,))
+                recent_queries = cursor.fetchall()
+                if recent_queries:
+                    trxid, stmtid, duration_us = recent_queries[0]
+
+            if not trxid:
+                return {
+                    "result": f"Query executed in {execution_time:.2f}s\nProfiling data not available",
+                    "query": labeled_sql,
+                    "label": label,
+                    "execution_time_seconds": execution_time,
+                    "note": "Could not resolve query IDs - profiling data unavailable"
+                }
+
+            cursor.execute("""
+                SELECT path_line
+                FROM v_internal.dc_explain_plans
+                WHERE transaction_id = %s
+                AND statement_id = %s
+                ORDER BY path_id, path_line_index
+            """, (trxid, stmtid))
+            plan_rows = cursor.fetchall()
+            plan_lines = [r[0] for r in plan_rows] if plan_rows else ["Plan not available"]
+
+            result = f"Execution Time: {duration_us or int(execution_time * 1000000)}μs\n"
+            result += f"Transaction ID: {trxid}\n"
+            result += f"Statement ID: {stmtid}\n\n"
+            result += "Execution Plan:\n"
+            result += "\n".join(plan_lines)
+
             return {
-                "result": f"Query executed in {execution_time:.2f}s\nProfiling data not available",
-                "query":labeled_sql,
+                "result": result,
+                "query": query[:500],
                 "label": label,
-                "execution_time_seconds": execution_time,
-                "note": "Could not resolve query IDs - profiling data unavailable"
+                "transaction_id": str(trxid),
+                "statement_id": str(stmtid),
+                "duration_us": duration_us,
+                "plan_line_count": len(plan_lines),
             }
+        except vertica_python.errors.Error as e:
+            raise RuntimeError(f"Database profile error: {str(e)}") from e
+        finally:
+            if cursor:
+                cursor.close()
+            if conn:
+                manager.release_connection(conn)
 
-        # Get execution plan
-        cursor.execute("""
-            SELECT path_line
-            FROM v_internal.dc_explain_plans
-            WHERE transaction_id = %s 
-            AND statement_id = %s
-            ORDER BY path_id, path_line_index
-        """, (trxid, stmtid))
-
-        plan_rows = cursor.fetchall()
-        plan_lines = [r[0] for r in plan_rows] if plan_rows else ["Plan not available"]
-
-        result = f"Execution Time: {duration_us or int(execution_time * 1000000)}μs\n"
-        result += f"Transaction ID: {trxid}\n"
-        result += f"Statement ID: {stmtid}\n\n"
-        result += "Execution Plan:\n"
-        result += "\n".join(plan_lines)  # Limit plan lines
-
-        return {
-            "result": result,
-            "query": query[:500],
-            "label": label,
-            "transaction_id": str(trxid),
-            "statement_id": str(stmtid),
-            "duration_us": duration_us,
-            "plan_line_count": len(plan_lines),
-        }
-
+    try:
+        return await asyncio.to_thread(_sync_profile)
     except Exception as e:
         error_msg = f"Profile error: {str(e)}"
         await ctx.error(error_msg)
         raise RuntimeError(error_msg) from e
-    finally:
-        if cursor:
-            cursor.close()
-        if conn:
-            manager.release_connection(conn)
 
 #--------------------------------------------
 #---------- Database Status ------------------
@@ -1414,103 +1428,99 @@ async def database_status(ctx: Context) -> dict:
     if not manager:
         raise RuntimeError("No database connection manager available")
 
-    conn = cursor = None
-    try:
-        conn = manager.get_connection()
-        cursor = conn.cursor()
+    def _sync_status():
+        conn = cursor = None
+        try:
+            conn = manager.get_connection()
+            cursor = conn.cursor()
 
-        # Get version
-        cursor.execute("SELECT version()")
-        row = cursor.fetchone()
-        version = row[0] if row else "Unknown"
+            cursor.execute("SELECT version()")
+            row = cursor.fetchone()
+            version = row[0] if row else "Unknown"
 
-        # Get current database size and usage (most recent audit)
-        current_usage_query = """
-        SELECT 
-            (license_size_bytes / 1024^3)::NUMERIC(10, 2) AS license_gb,
-            (database_size_bytes / 1024^3)::NUMERIC(10, 2) AS db_gb,
-            (usage_percent * 100)::NUMERIC(5, 2) AS usage_pct,
-            audit_start_timestamp,
-            audit_end_timestamp
-        FROM v_catalog.license_audits
-        WHERE audit_end_timestamp = (
-            SELECT MAX(audit_end_timestamp) 
+            current_usage_query = """
+            SELECT
+                (license_size_bytes / 1024^3)::NUMERIC(10, 2) AS license_gb,
+                (database_size_bytes / 1024^3)::NUMERIC(10, 2) AS db_gb,
+                (usage_percent * 100)::NUMERIC(5, 2) AS usage_pct,
+                audit_start_timestamp,
+                audit_end_timestamp
             FROM v_catalog.license_audits
-        )
-        LIMIT 1;
-        """
+            WHERE audit_end_timestamp = (
+                SELECT MAX(audit_end_timestamp)
+                FROM v_catalog.license_audits
+            )
+            LIMIT 1;
+            """
+            cursor.execute(current_usage_query)
+            current = cursor.fetchone()
 
-        cursor.execute(current_usage_query)
-        current = cursor.fetchone()
+            trend_query = """
+            SELECT
+                DATE(audit_end_timestamp) as audit_date,
+                AVG((usage_percent * 100))::NUMERIC(5, 2) AS avg_usage_pct,
+                MAX((database_size_bytes / 1024^3))::NUMERIC(10, 2) AS max_db_gb
+            FROM v_catalog.license_audits
+            WHERE audit_end_timestamp >= CURRENT_DATE - INTERVAL '7 days'
+            GROUP BY DATE(audit_end_timestamp)
+            ORDER BY audit_date DESC
+            LIMIT 7;
+            """
+            cursor.execute(trend_query)
+            trend_data = cursor.fetchall()
 
-        # Get usage trend (last 7 days)
-        trend_query = """
-        SELECT 
-            DATE(audit_end_timestamp) as audit_date,
-            AVG((usage_percent * 100))::NUMERIC(5, 2) AS avg_usage_pct,
-            MAX((database_size_bytes / 1024^3))::NUMERIC(10, 2) AS max_db_gb
-        FROM v_catalog.license_audits
-        WHERE audit_end_timestamp >= CURRENT_DATE - INTERVAL '7 days'
-        GROUP BY DATE(audit_end_timestamp)
-        ORDER BY audit_date DESC
-        LIMIT 7;
-        """
+            result = "Database Status Report\n"
+            result += f"Version: {version[:60]}\n\n"
 
-        cursor.execute(trend_query)
-        trend_data = cursor.fetchall()
-
-        # Format results
-        result = f"Database Status Report\n"
-        result += f"Version: {version[:60]}\n\n"
-
-        if current:
-            license_gb, db_gb, usage_pct, start_time, end_time = current
-            result += f"Current Usage:\n"
-            result += f"- Database Size: {db_gb} GB\n"
-            result += f"- License Capacity: {license_gb} GB\n"
-            result += f"- Utilization: {usage_pct}% ({db_gb}/{license_gb} GB)\n"
-            result += f"- Last Updated: {end_time}\n\n"
-            
-            # Add status indicator
-            if usage_pct > 90:
-                result += f"⚠️  Status: CRITICAL - Near capacity limit\n"
-            elif usage_pct > 75:
-                result += f"⚡ Status: WARNING - High utilization\n"
+            if current:
+                license_gb, db_gb, usage_pct, start_time, end_time = current
+                result += "Current Usage:\n"
+                result += f"- Database Size: {db_gb} GB\n"
+                result += f"- License Capacity: {license_gb} GB\n"
+                result += f"- Utilization: {usage_pct}% ({db_gb}/{license_gb} GB)\n"
+                result += f"- Last Updated: {end_time}\n\n"
+                if usage_pct > 90:
+                    result += "\u26a0\ufe0f  Status: CRITICAL - Near capacity limit\n"
+                elif usage_pct > 75:
+                    result += "\u26a1 Status: WARNING - High utilization\n"
+                else:
+                    result += "\u2705 Status: HEALTHY - Normal utilization\n"
             else:
-                result += f"✅ Status: HEALTHY - Normal utilization\n"
-        else:
-            result += "Current Usage: No audit data available\n"
+                result += "Current Usage: No audit data available\n"
 
-        if trend_data:
-            result += f"\n7-Day Usage Trend:\n"
-            for date, avg_usage, max_db in trend_data:
-                result += f"- {date}: {avg_usage}% ({max_db} GB)\n"
+            if trend_data:
+                result += "\n7-Day Usage Trend:\n"
+                for date, avg_usage, max_db in trend_data:
+                    result += f"- {date}: {avg_usage}% ({max_db} GB)\n"
 
-        # Get node count and cluster info
-        cursor.execute("SELECT COUNT(*) FROM v_catalog.nodes WHERE node_state = 'UP'")
-        node_count = cursor.fetchone()[0]
-        result += f"\nCluster Info:\n"
-        result += f"- Active Nodes: {node_count}\n"
+            cursor.execute("SELECT COUNT(*) FROM v_catalog.nodes WHERE node_state = 'UP'")
+            node_count = cursor.fetchone()[0]
+            result += "\nCluster Info:\n"
+            result += f"- Active Nodes: {node_count}\n"
 
-        return {
-            "result": result,
-            "version": version,
-            "current_usage_pct": float(current[2]) if current else 0,
-            "current_db_size_gb": float(current[1]) if current else 0,
-            "license_capacity_gb": float(current[0]) if current else 0,
-            "trend_data_points": len(trend_data),
-            "cluster_nodes": node_count
-        }
+            return {
+                "result": result,
+                "version": version,
+                "current_usage_pct": float(current[2]) if current else 0,
+                "current_db_size_gb": float(current[1]) if current else 0,
+                "license_capacity_gb": float(current[0]) if current else 0,
+                "trend_data_points": len(trend_data),
+                "cluster_nodes": node_count
+            }
+        except vertica_python.errors.Error as e:
+            raise RuntimeError(f"Database error getting status: {str(e)}") from e
+        finally:
+            if cursor:
+                cursor.close()
+            if conn:
+                manager.release_connection(conn)
 
+    try:
+        return await asyncio.to_thread(_sync_status)
     except Exception as e:
         error_msg = f"Error getting status: {str(e)}"
         await ctx.error(error_msg)
         raise RuntimeError(error_msg) from e
-    finally:
-        if cursor:
-            cursor.close()
-        if conn:
-            manager.release_connection(conn)
 
 #--------------------------------------------
 #---------- System Performance ------------------
@@ -1530,97 +1540,107 @@ async def analyze_system_performance(
     if not manager:
         raise RuntimeError("No database connection manager available")
 
+    # SECURITY: Validate all parameters BEFORE SQL construction to prevent injection
     bucket = bucket.lower()
     if bucket not in {"second", "minute", "hour"}:
-        raise ValueError("Invalid bucket value")
+        raise ValueError(f"Invalid bucket value: {bucket}. Must be 'second', 'minute', or 'hour'")
 
-    def _rows_to_dicts(cur, rows):
-        cols = [d[0] for d in cur.description] if cur.description else []
+    # Strict type validation to prevent SQL injection via type coercion
+    try:
+        window_minutes = int(window_minutes)
+        if window_minutes < 1 or window_minutes > 1440:  # Max 24 hours
+            raise ValueError(f"window_minutes must be between 1 and 1440, got {window_minutes}")
+    except (TypeError, ValueError) as e:
+        raise ValueError(f"window_minutes must be a valid integer: {e}")
+
+    try:
+        top_n = int(top_n)
+        if top_n < 1 or top_n > 100:
+            raise ValueError(f"top_n must be between 1 and 100, got {top_n}")
+    except (TypeError, ValueError) as e:
+        raise ValueError(f"top_n must be a valid integer: {e}")
+
+    def _rows_to_dicts(cols, rows):
         return [dict(zip(cols, r)) for r in rows]
 
-    conn = cursor = None
-    try:
-        conn = manager.get_connection()
-
-        if not await _validate_connection(conn):
-            manager.release_connection(conn)
+    def _sync_perf():
+        conn = cursor = None
+        try:
             conn = manager.get_connection()
+            cursor = conn.cursor()
 
-        cursor = conn.cursor()
+            if flush:
+                try:
+                    cursor.execute("SELECT FLUSH_DATA_COLLECTOR();")
+                    cursor.fetchall()
+                except Exception:
+                    pass  # Non-critical
 
-        if flush:
-            try:
-                cursor.execute("SELECT FLUSH_DATA_COLLECTOR();")
-                cursor.fetchall()
-            except Exception:
-                pass  # Non-critical
+            ts_expr = f"DATE_TRUNC('{bucket}', end_time)"
+            where = f"end_time >= CURRENT_TIMESTAMP - INTERVAL '{window_minutes} minutes'"
 
-        window_minutes = max(1, int(window_minutes))
-        top_n = max(1, min(10, int(top_n)))  # Cap at 10
-        ts_expr = f"DATE_TRUNC('{bucket}', end_time)"
-        where = f"end_time >= CURRENT_TIMESTAMP - INTERVAL '{window_minutes} minutes'"
+            cpu_sql = f"""
+                SELECT node_name, {ts_expr} AS ts,
+                       AVG(average_cpu_usage_percent) AS cpu_pct
+                FROM v_monitor.cpu_usage
+                WHERE {where}
+                GROUP BY node_name, ts
+                ORDER BY node_name, ts
+                LIMIT 100
+            """
+            cursor.execute(cpu_sql)
+            cpu_desc = [d[0] for d in cursor.description] if cursor.description else []
+            cpu_rows = _rows_to_dicts(cpu_desc, cursor.fetchall())
 
-        # CPU metrics
-        cpu_sql = f"""
-            SELECT node_name, {ts_expr} AS ts,
-                   AVG(average_cpu_usage_percent) AS cpu_pct
-            FROM v_monitor.cpu_usage
-            WHERE {where}
-            GROUP BY node_name, ts
-            ORDER BY node_name, ts
-            LIMIT 100
-        """
+            mem_sql = f"""
+                SELECT node_name, {ts_expr} AS ts,
+                       AVG(average_memory_usage_percent) AS mem_pct
+                FROM v_monitor.memory_usage
+                WHERE {where}
+                GROUP BY node_name, ts
+                ORDER BY node_name, ts
+                LIMIT 100
+            """
+            cursor.execute(mem_sql)
+            mem_desc = [d[0] for d in cursor.description] if cursor.description else []
+            mem_rows = _rows_to_dicts(mem_desc, cursor.fetchall())
 
-        cursor.execute(cpu_sql)
-        cpu_rows = _rows_to_dicts(cursor, cursor.fetchall())
+            top_tables_sql = f"""
+                SELECT anchor_table_schema, anchor_table_name,
+                       SUM(ros_count) AS total_ros_containers
+                FROM v_monitor.projection_storage
+                GROUP BY 1,2
+                ORDER BY total_ros_containers DESC
+                LIMIT {top_n}
+            """
+            cursor.execute(top_tables_sql)
+            top_desc = [d[0] for d in cursor.description] if cursor.description else []
+            top_tables = _rows_to_dicts(top_desc, cursor.fetchall())
 
-        # Memory metrics
-        mem_sql = f"""
-            SELECT node_name, {ts_expr} AS ts,
-                   AVG(average_memory_usage_percent) AS mem_pct
-            FROM v_monitor.memory_usage
-            WHERE {where}
-            GROUP BY node_name, ts
-            ORDER BY node_name, ts
-            LIMIT 100
-        """
+            return {
+                "cpu": cpu_rows[:50],
+                "memory": mem_rows[:50],
+                "top_tables_by_ros": top_tables,
+                "meta": {
+                    "window_minutes": window_minutes,
+                    "bucket": bucket,
+                    "top_n": top_n,
+                },
+            }
+        except vertica_python.errors.Error as e:
+            raise RuntimeError(f"Database performance error: {str(e)}") from e
+        finally:
+            if cursor:
+                cursor.close()
+            if conn:
+                manager.release_connection(conn)
 
-        cursor.execute(mem_sql)
-        mem_rows = _rows_to_dicts(cursor, cursor.fetchall())
-
-        # Top tables by ROS
-        top_tables_sql = f"""
-            SELECT anchor_table_schema, anchor_table_name,
-                   SUM(ros_count) AS total_ros_containers
-            FROM v_monitor.projection_storage
-            GROUP BY 1,2
-            ORDER BY total_ros_containers DESC
-            LIMIT {top_n}
-        """
-
-        cursor.execute(top_tables_sql)
-        top_tables = _rows_to_dicts(cursor, cursor.fetchall())
-
-        return {
-            "cpu": cpu_rows[:50],  # Limit rows
-            "memory": mem_rows[:50],
-            "top_tables_by_ros": top_tables,
-            "meta": {
-                "window_minutes": window_minutes,
-                "bucket": bucket,
-                "top_n": top_n,
-            },
-        }
-
+    try:
+        return await asyncio.to_thread(_sync_perf)
     except Exception as e:
         error_msg = f"Performance analysis error: {str(e)}"
         await ctx.error(error_msg)
         raise RuntimeError(error_msg) from e
-    finally:
-        if cursor:
-            cursor.close()
-        if conn:
-            manager.release_connection(conn)
             
 
 #--------------------------------------------
