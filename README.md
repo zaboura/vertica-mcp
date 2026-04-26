@@ -427,7 +427,42 @@ C:\venv\vertica-mcp\Scripts\vertica-mcp.exe --transport stdio --env-file C:\path
 - `--env-file` ensures your credentials load correctly even if Claude's working directory differs
 - Use absolute paths to avoid path resolution issues
 
-3. **Development Alternative: From Source (uv)**
+3. **Alternative: Using Python Module Execution**
+
+You can also run the server using Python's `-m` flag (now supported with `__main__.py`):
+
+```json
+{
+  "mcpServers": {
+    "vertica-mcp-stdio": {
+      "command": "python",
+      "args": ["-m", "vertica_mcp", "--transport", "stdio"],
+      "cwd": "/path/to/vertica-mcp",
+      "env": {
+        "VERTICA_HOST": "your_host",
+        "VERTICA_PORT": "5433",
+        "VERTICA_DATABASE": "your_database",
+        "VERTICA_USER": "your_username",
+        "VERTICA_PASSWORD": "your_password"
+      }
+    }
+  }
+}
+```
+
+**Or using .env file:**
+```json
+{
+  "mcpServers": {
+    "vertica-mcp-stdio": {
+      "command": "python",
+      "args": ["-m", "vertica_mcp", "--transport", "stdio", "--env-file", "/absolute/path/to/.env"]
+    }
+  }
+}
+```
+
+4. **Development Alternative: From Source (uv)**
 
 This option is suitable for development when you want to work with the source code directly:
 
@@ -450,7 +485,7 @@ This option is suitable for development when you want to work with the source co
 }
 ```
 
-4. **Docker Configuration Options**
+5. **Docker Configuration Options**
 
 **Option A — Docker Compose (recommended for containerized environments)**
 
@@ -1047,6 +1082,32 @@ mypy vertica_mcp/
 ---
 
 ## Changelog
+
+### Version 0.1.4 (2026-04-26) - Bug Fixes & Improvements
+
+**Bug Fixes:**
+- ✅ Fixed rate limiting authentication issue in stateless HTTP mode
+  - Added `_extract_client_id_from_auth()` helper to extract client ID from API key
+  - `run_query_safely()` now works correctly with HTTP transport
+  - Uses SHA-256 hash of API key as stable client identifier
+- ✅ Fixed CLI module execution (`python -m vertica_mcp`)
+  - Added `vertica_mcp/__main__.py` for proper module invocation
+  - Resolves Claude Desktop connection issues when using `python -m` syntax
+
+**Improvements:**
+- 🧹 Repository cleanup: Removed 16 temporary/generated test files (~10.3 MB)
+- 📝 Updated `.gitignore` to prevent test file regeneration
+- 📚 Enhanced README with multiple Claude Desktop configuration options
+- 🔧 Better support for different installation methods (pip, uv, source)
+
+**Technical Changes:**
+- Added `hashlib` import for client ID hashing
+- Modified rate limiting to support stateless HTTP sessions
+- Maintained backward compatibility with STDIO and SSE transports
+
+### Version 0.1.3 (2025-??-??) - Published on PyPI
+
+See [PyPI release history](https://pypi.org/project/vertica-mcp/#history)
 
 ### Version 0.1.0 (2025-08-20) - Initial Release
 
