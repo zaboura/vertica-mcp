@@ -312,3 +312,13 @@ docs/superpowers/
 # graphify output (development only)
 graphify-out/
 graphify-repo-temp/
+.graphify*
+
+# Manual test files (keep tests/ directory only)
+/test_connection.py
+/test_mcp_server.py
+/quick_test.sh
+/TESTING_SUMMARY.md
+/TEST_RESULTS.md
+/RUN_TESTS.md
+/NEXT_STEPS.md

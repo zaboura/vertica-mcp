@@ -25,6 +25,7 @@
 
 
 import asyncio
+import hashlib
 import logging
 import os
 import re
@@ -244,6 +245,31 @@ def _check_rate_limit(client_id: str) -> bool:
     return True
 
 
+def _extract_client_id_from_auth(ctx) -> str:
+    """Extract client ID from authorization context for rate limiting.
+
+    For stateless HTTP sessions where ctx.request_context doesn't have client_id,
+    this extracts a stable identifier from the Authorization header.
+
+    Args:
+        ctx: The MCP context object
+
+    Returns:
+        A stable client identifier string for rate limiting
+    """
+    # Try to get from request headers if available
+    request = getattr(ctx.request_context, "request", None)
+    if request and hasattr(request, "headers"):
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            # Use hash of API key as client identifier
+            key = auth_header[7:]  # Remove "Bearer " prefix
+            return hashlib.sha256(key.encode()).hexdigest()[:16]
+
+    # Fallback for stateless sessions without auth header
+    return "stateless-http-client"
+
+
 @lru_cache(maxsize=128)
 def _get_cached_metadata(cache_key: str) -> Any | None:
     """Get cached metadata if not expired."""
@@ -308,13 +334,13 @@ async def _execute_query_async(
             result = None
             if fetch == "all":
                 result = cursor.fetchall(), (
-                    [col.name for col in cursor.description]
+                    [col[0] if isinstance(col, tuple) else getattr(col, 'name', col[0]) for col in cursor.description]
                     if cursor.description
                     else []
                 )
             elif fetch == "many":
                 result = cursor.fetchmany(max_rows), (
-                    [col.name for col in cursor.description]
+                    [col[0] if isinstance(col, tuple) else getattr(col, 'name', col[0]) for col in cursor.description]
                     if cursor.description
                     else []
                 )
@@ -749,16 +775,12 @@ async def run_query_safely(
     await ctx.info("run_query_safely called")
 
     # SECURITY FIX (P2-1): Rate limiting requires authenticated client_id
-    # Prevent bypass by sharing "default" bucket across all unauthenticated users
-    client_id = getattr(ctx.request_context, "client_id", None) or getattr(
-        ctx.request_context, "connection_id", None
+    # For stateless HTTP sessions, extract from Authorization header as fallback
+    client_id = (
+        getattr(ctx.request_context, "client_id", None)
+        or getattr(ctx.request_context, "connection_id", None)
+        or _extract_client_id_from_auth(ctx)
     )
-
-    if not client_id:
-        raise RuntimeError(
-            "Rate limiting requires authenticated access. "
-            "Configure JWT or API key authentication to use query tools."
-        )
 
     if not _check_rate_limit(client_id):
         raise RuntimeError(

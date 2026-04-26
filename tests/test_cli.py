@@ -15,11 +15,11 @@ def runner():
 def test_cli_chooses_stdio_and_calls_mcp_run(monkeypatch, runner):
     called = {}
 
-    def fake_run(*args, **kwargs):
+    async def fake_run_stdio():
         called["stdio"] = True
 
-    # stdio path calls server.mcp.run
-    monkeypatch.setattr(server.mcp, "run", fake_run)
+    cb = cli_cmd.callback
+    monkeypatch.setitem(cb.__globals__, "run_stdio", fake_run_stdio)
 
     res = runner.invoke(cli_cmd, ["--transport", "stdio"])
     assert res.exit_code == 0
@@ -57,3 +57,70 @@ def test_cli_chooses_http(monkeypatch, runner):
     )
     assert res.exit_code == 0, res.output
     assert called["http"] == ("localhost", 9999, "/mcp", True, True)
+
+def test_cli_init_creates_env_file(runner):
+    with runner.isolated_filesystem():
+        res = runner.invoke(cli_cmd, ["--init"])
+        assert res.exit_code == 0
+        import os
+        assert os.path.exists(".env")
+        with open(".env", "r") as f:
+            content = f.read()
+            assert "VERTICA_HOST=localhost" in content
+
+def test_cli_init_already_exists_yes(runner):
+    with runner.isolated_filesystem():
+        with open(".env", "w") as f:
+            f.write("OLD_CONTENT")
+        
+        # User says yes ('y') to overwrite
+        res = runner.invoke(cli_cmd, ["--init"], input="y\n")
+        assert res.exit_code == 0
+        with open(".env", "r") as f:
+            content = f.read()
+            assert "VERTICA_HOST=localhost" in content
+
+def test_cli_init_already_exists_no(runner):
+    with runner.isolated_filesystem():
+        with open(".env", "w") as f:
+            f.write("OLD_CONTENT")
+        
+        # User says no ('n') to overwrite
+        res = runner.invoke(cli_cmd, ["--init"], input="n\n")
+        assert res.exit_code == 0
+        with open(".env", "r") as f:
+            content = f.read()
+            assert content == "OLD_CONTENT"
+
+def test_cli_env_overrides(monkeypatch, runner):
+    called = {}
+    
+    async def fake_run_stdio():
+        called["stdio"] = True
+
+    cb = cli_cmd.callback
+    monkeypatch.setitem(cb.__globals__, "run_stdio", fake_run_stdio)
+    
+    import os
+    res = runner.invoke(cli_cmd, [
+        "--transport", "stdio",
+        "--host", "my-vertica-host",
+        "--db-port", "1234",
+        "--database", "mydb",
+        "--user", "myuser",
+        "--password", "mypass",
+        "--connection-limit", "25",
+        "--ssl",
+        "--ssl-reject-unauthorized"
+    ])
+    
+    assert res.exit_code == 0
+    assert called.get("stdio") is True
+    assert os.environ.get("VERTICA_HOST") == "my-vertica-host"
+    assert os.environ.get("VERTICA_PORT") == "1234"
+    assert os.environ.get("VERTICA_DATABASE") == "mydb"
+    assert os.environ.get("VERTICA_USER") == "myuser"
+    assert os.environ.get("VERTICA_PASSWORD") == "mypass"
+    assert os.environ.get("VERTICA_CONNECTION_LIMIT") == "25"
+    assert os.environ.get("VERTICA_SSL") == "true"
+

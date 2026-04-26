@@ -64,7 +64,8 @@ class _FakeCursor:
         self._batch_i = 0
         self.description = None  # set for SELECT-like responses
 
-    def execute(self, sql: str):
+    def execute(self, sql: str, params=None):
+        self._batch_i = 0
         sql_upper = sql.strip().upper()
 
         # Session options: ignore
@@ -101,9 +102,9 @@ class _FakeCursor:
             self.description = [(c,) for c in cols]
             return
 
-        # Bare SELECT -> streaming run
+        # Bare SELECT -> treat as probe so fetchall returns rows
         if sql_upper.startswith("SELECT"):
-            self._last = "stream"
+            self._last = "probe"
             cols = self.script.get("columns", ["c1", "c2"])
             self.description = [(c,) for c in cols]
             return
@@ -120,7 +121,9 @@ class _FakeCursor:
         if self._last in ("stream",):
             return []
         if self._last == "count":
-            return []
+            if "count" in self.script:
+                return [(int(self.script["count"]),)]
+            return [(len(self.script.get("probe_rows", [])),)]
         return []
 
     def fetchmany(self, batch_size: int) -> List[tuple]:

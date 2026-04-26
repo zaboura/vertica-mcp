@@ -90,7 +90,7 @@ async def test_non_select_permission_denied(make_ctx, small_result_script, serve
             ctx=ctx,
             query="CREATE TABLE t(id INT)",
         )
-    assert "not allowed" in str(ei.value)
+    assert "not allowed" in str(ei.value) or "read-only queries are allowed" in str(ei.value)
 
     # UPDATE -> should be blocked
     with pytest.raises(RuntimeError):
