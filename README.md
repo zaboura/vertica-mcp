@@ -13,7 +13,7 @@
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg?logo=docker)](https://hub.docker.com/)
 <!-- [![CI/CD](https://img.shields.io/github/actions/workflow/status/zaboura/vertica-mcp/ci.yml?label=CI/CD)](https://github.com/zaboura/vertica-mcp/actions) -->
 <!-- [![Python](https://img.shields.io/pypi/pyversions/vertica-mcp.svg)](https://pypi.org/project/vertica-mcp/) -->
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Downloads](https://pepy.tech/badge/vertica-mcp)](https://pepy.tech/project/vertica-mcp)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
@@ -961,7 +961,7 @@ vertica-mcp/
 ├── pyproject.toml               # Build configuration and metadata (PEP 621)
 ├── README.md                    # Project documentation
 ├── CHANGELOG.md                 # Release notes and version history
-├── LICENSE                      # Apache 2.0 license
+├── LICENSE                      # MIT license with attribution
 ├── .gitignore                   # Git ignore rules
 ├── .dockerignore                # Docker ignore rules
 ├── .env.example                 # Sample environment file (do NOT commit .env)
@@ -1137,13 +1137,13 @@ For complete version history and detailed changes, see [CHANGELOG.md](CHANGELOG.
 
 ## License
 
-This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for complete terms and conditions.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for complete terms and conditions.
 
 **License Summary:**
 - Commercial and non-commercial use permitted
 - Modification and distribution allowed
-- Patent protection included
-- Warranty and liability disclaimers apply
+- No warranty provided
+- Attribution required for derived portions
 
 ---
 

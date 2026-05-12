@@ -1,25 +1,11 @@
-# SPDX-License-Identifier: Apache-2.0
-# Copyright 2025 Abdelhak Zabour
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2025 Abdelhak Zabour
+# Copyright (c) 2024-2025 nolleh (portions derived from mcp-vertica)
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-#
-# ---------------------------------------------------------------------
-# MIT-LICENSED PORTIONS (ATTRIBUTION)
 # Portions of this file are derived from mcp-vertica by nolleh
 # https://github.com/nolleh/mcp-vertica
-# Copyright (c) 2024-2025 nolleh
-# Licensed under the MIT License (see LICENSE for full text)
-# ---------------------------------------------------------------------
+#
+# See LICENSE file for full license text and attribution details.
 
 """Vertica connection management module."""
 
